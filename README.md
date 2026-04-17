@@ -6,7 +6,7 @@ A small local online judge with:
 - SQLite database
 - Redis queue with asynchronous worker
 - React frontend
-- Worker-local C++ compilation and execution with process limits
+- Worker-local C++ and Python execution with process limits
 - Exact output comparison
 - Standard results: `AC`, `WA`, `TLE`, `RE`, `CE`
 
@@ -15,6 +15,7 @@ A small local online judge with:
 - `GET /health`
 - `GET /problems`
 - `GET /problems/{id}`
+- `GET /problems/{id}/submissions`
 - `POST /problems`
 - `POST /submissions`
 - `GET /submissions/{id}`
@@ -70,9 +71,28 @@ curl -X POST http://localhost:8000/problems \
   "title": "Print 42",
   "slug": "print-42",
   "time_limit_ms": 1000,
+  "description": "Print the number 42.",
+  "input_spec": "There is no input.",
+  "output_spec": "Print 42 followed by a newline.",
+  "example_input": "",
+  "example_output": "42\n",
   "testcases": [
     {"input": "", "output": "42\n"}
   ]
+}
+JSON
+```
+
+## Python Submission Example
+
+```bash
+curl -X POST http://localhost:8000/submissions \
+  -H 'Content-Type: application/json' \
+  -d @- <<'JSON'
+{
+  "problem_id": 1,
+  "language": "python",
+  "source_code": "import sys\nnums = list(map(int, sys.stdin.read().split()))\nprint(nums[0] + nums[1])"
 }
 JSON
 ```
@@ -124,5 +144,6 @@ npm run dev
 
 3. Open `http://localhost:5173`
 4. Click a problem from the list
-5. Submit C++ code
-6. Watch the submission status update from `QUEUED` to `RUNNING` and then to the final result
+5. Open the `statement`, `submit`, and `submission history` tabs on a problem page
+6. Submit either C++ or Python code
+7. Watch the submission status update from `QUEUED` to `RUNNING` and then to the final result

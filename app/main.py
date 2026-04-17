@@ -13,6 +13,7 @@ from app.queue import get_queue
 from app.schemas import ProblemCreate, ProblemOut, SubmissionCreate, SubmissionOut
 
 app = FastAPI(title="Minimal OJ")
+SUPPORTED_LANGUAGES = {"cpp", "python"}
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -33,6 +34,15 @@ def startup() -> None:
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+def normalize_language(language: str) -> str:
+    normalized = language.strip().lower()
+    aliases = {"c++": "cpp", "py": "python"}
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in SUPPORTED_LANGUAGES:
+        raise HTTPException(status_code=400, detail="Supported languages: cpp, python")
+    return normalized
 
 
 @app.get("/problems", response_model=list[ProblemOut])
@@ -60,7 +70,16 @@ def create_problem(payload: ProblemCreate, db: Session = Depends(get_db)):
     tests_dir = settings.data_dir / "problems" / payload.slug / "tests"
     tests_dir.mkdir(parents=True, exist_ok=True)
 
-    problem = Problem(title=payload.title, slug=payload.slug, time_limit_ms=payload.time_limit_ms)
+    problem = Problem(
+        title=payload.title,
+        slug=payload.slug,
+        time_limit_ms=payload.time_limit_ms,
+        description=payload.description,
+        input_spec=payload.input_spec,
+        output_spec=payload.output_spec,
+        example_input=payload.example_input,
+        example_output=payload.example_output,
+    )
     db.add(problem)
     db.flush()
 
@@ -88,8 +107,7 @@ def create_problem(payload: ProblemCreate, db: Session = Depends(get_db)):
 
 @app.post("/submissions", response_model=SubmissionOut, status_code=202)
 def create_submission(payload: SubmissionCreate, db: Session = Depends(get_db)):
-    if payload.language.lower() != "cpp":
-        raise HTTPException(status_code=400, detail="Only cpp is supported")
+    language = normalize_language(payload.language)
 
     problem = db.scalar(select(Problem).where(Problem.id == payload.problem_id))
     if not problem:
@@ -97,7 +115,7 @@ def create_submission(payload: SubmissionCreate, db: Session = Depends(get_db)):
 
     submission = Submission(
         problem_id=payload.problem_id,
-        language="cpp",
+        language=language,
         source_code=payload.source_code,
         status="QUEUED",
     )
@@ -116,3 +134,17 @@ def get_submission(submission_id: int, db: Session = Depends(get_db)):
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
     return SubmissionOut.from_model(submission)
+
+
+@app.get("/problems/{problem_id}/submissions", response_model=list[SubmissionOut])
+def list_problem_submissions(problem_id: int, db: Session = Depends(get_db)):
+    problem = db.scalar(select(Problem).where(Problem.id == problem_id))
+    if not problem:
+        raise HTTPException(status_code=404, detail="Problem not found")
+
+    submissions = db.scalars(
+        select(Submission)
+        .where(Submission.problem_id == problem_id)
+        .order_by(Submission.created_at.desc(), Submission.id.desc())
+    ).all()
+    return [SubmissionOut.from_model(submission) for submission in submissions]

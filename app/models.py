@@ -13,6 +13,11 @@ class Problem(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     time_limit_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=1000)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    input_spec: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    output_spec: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    example_input: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    example_output: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
     testcases: Mapped[list["Testcase"]] = relationship(
         back_populates="problem",
@@ -43,6 +48,7 @@ class Submission(Base):
     source_code: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="QUEUED")
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    execution_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
