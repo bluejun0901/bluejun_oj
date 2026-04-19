@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = "/api";
 const FINAL_STATUSES = new Set(["AC", "WA", "TLE", "RE", "CE"]);
 const LANGUAGE_OPTIONS = [
   { value: "cpp", label: "C++" },
