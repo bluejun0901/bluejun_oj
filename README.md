@@ -6,9 +6,10 @@ A small local online judge with:
 - SQLite database
 - Redis queue with asynchronous worker
 - React frontend
-- Worker-local C++ and Python execution with process limits
+- `ioi/isolate` sandboxing with cgroup-backed time and memory accounting
+- Language registry with one judge definition per file
 - Exact output comparison
-- Standard results: `AC`, `WA`, `TLE`, `RE`, `CE`
+- Standard results: `AC`, `WA`, `TLE`, `RE`, `CE`, `MLE`
 
 ## Endpoints
 
@@ -16,6 +17,7 @@ A small local online judge with:
 - `GET /problems`
 - `GET /problems/{id}`
 - `GET /problems/{id}/submissions`
+- `GET /languages`
 - `POST /problems`
 - `POST /submissions`
 - `GET /submissions/{id}`
@@ -110,6 +112,20 @@ uv run python -m worker.run_worker
 
 You still need local Redis available because the worker uses Redis for the queue. The worker now compiles and runs submissions directly inside its own container.
 
+## Language Registry
+
+Judge languages live under [`app/languages/`](/Users/gimmyeongjun/source/experiment/OJ_test/app/languages).
+
+- One file defines one language.
+- The backend uses the registry for validation and aliases.
+- The frontend reads `/languages`, so adding a new file is enough to surface a new language option and starter template.
+
+## Sandbox Execution
+
+- The worker requires `isolate` and cgroup access.
+- `docker compose` installs `isolate` from the official UCW APT repository and runs the worker as `privileged` so sandbox setup succeeds.
+- Submission results include both peak execution time and peak memory usage.
+
 ## Frontend
 
 The frontend lives in [frontend/](/src/gs25009/OJ_test/frontend) and uses the backend APIs as-is.
@@ -145,5 +161,5 @@ npm run dev
 3. Open `http://localhost:5173`
 4. Click a problem from the list
 5. Open the `statement`, `submit`, and `submission history` tabs on a problem page
-6. Submit either C++ or Python code
+6. Submit any language exposed by `/languages`
 7. Watch the submission status update from `QUEUED` to `RUNNING` and then to the final result

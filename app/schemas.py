@@ -48,6 +48,20 @@ class ProblemOut(BaseModel):
         )
 
 
+class LanguageOut(BaseModel):
+    key: str
+    display_name: str
+    default_source: str
+
+    @classmethod
+    def from_spec(cls, spec):
+        return cls(
+            key=spec.key,
+            display_name=spec.display_name,
+            default_source=spec.default_source,
+        )
+
+
 class SubmissionCreate(BaseModel):
     problem_id: int
     language: str
@@ -61,6 +75,7 @@ class SubmissionOut(BaseModel):
     status: str
     details: str | None
     execution_time_ms: int | None
+    memory_usage_kb: int | None
     created_at: datetime
     updated_at: datetime
 
@@ -73,6 +88,7 @@ class SubmissionOut(BaseModel):
             status=submission.status,
             details=submission.details,
             execution_time_ms=submission.execution_time_ms,
+            memory_usage_kb=submission.memory_usage_kb,
             created_at=submission.created_at,
             updated_at=submission.updated_at,
         )

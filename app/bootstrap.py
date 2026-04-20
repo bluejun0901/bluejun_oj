@@ -52,6 +52,10 @@ def migrate_existing_db() -> None:
                 connection.execute(
                     text("ALTER TABLE submissions ADD COLUMN execution_time_ms INTEGER")
                 )
+            if "memory_usage_kb" not in columns:
+                connection.execute(
+                    text("ALTER TABLE submissions ADD COLUMN memory_usage_kb INTEGER")
+                )
 
 
 def seed_example_problem(db: Session) -> None:

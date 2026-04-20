@@ -1,22 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 const API_BASE = "/api";
-const FINAL_STATUSES = new Set(["AC", "WA", "TLE", "RE", "CE"]);
-const LANGUAGE_OPTIONS = [
-  { value: "cpp", label: "C++" },
-  { value: "python", label: "Python" },
-];
-const DEFAULT_SOURCES = {
-  cpp: `#include <iostream>
-
-int main() {
-    cout << "Hello, world!" << endl;    
-    return 0;
-}
-`,
-  python: `print("Hello, world!")
-`,
-};
+const FINAL_STATUSES = new Set(["AC", "WA", "TLE", "RE", "CE", "MLE"]);
 
 function normalizeStatus(status) {
   return status === "JUDGING" ? "RUNNING" : status;
@@ -78,6 +63,13 @@ function formatExecutionTime(value) {
     return "—";
   }
   return `${value} ms`;
+}
+
+function formatMemoryUsage(value) {
+  if (typeof value !== "number") {
+    return "—";
+  }
+  return `${value} KB`;
 }
 
 function TabLink({ active, children, href }) {
@@ -153,6 +145,7 @@ function SubmissionCard({ submission }) {
       <div className="submission-meta-grid">
         <p className="meta">Language: {submission.language}</p>
         <p className="meta">Execution: {formatExecutionTime(submission.execution_time_ms)}</p>
+        <p className="meta">Memory: {formatMemoryUsage(submission.memory_usage_kb)}</p>
         <p className="meta">Submitted: {formatTimestamp(submission.created_at)}</p>
       </div>
       {submission.details ? <pre className="details">{submission.details}</pre> : null}
@@ -202,17 +195,21 @@ function StatementTab({ problem }) {
   );
 }
 
-function SubmitTab({ problemId, latestSubmission, onSubmissionChange }) {
-  const [language, setLanguage] = useState("cpp");
-  const [drafts, setDrafts] = useState(() => ({ ...DEFAULT_SOURCES }));
+function SubmitTab({ problemId, languages, latestSubmission, onSubmissionChange }) {
+  const firstLanguage = languages[0]?.key ?? "";
+  const [language, setLanguage] = useState(firstLanguage);
+  const [drafts, setDrafts] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState("");
 
   useEffect(() => {
-    setLanguage("cpp");
-    setDrafts({ ...DEFAULT_SOURCES });
+    const nextDrafts = Object.fromEntries(
+      languages.map((entry) => [entry.key, entry.default_source]),
+    );
+    setLanguage(languages[0]?.key ?? "");
+    setDrafts(nextDrafts);
     setSubmissionError("");
-  }, [problemId]);
+  }, [languages, problemId]);
 
   useEffect(() => {
     if (!latestSubmission || FINAL_STATUSES.has(latestSubmission.status)) {
@@ -277,18 +274,19 @@ function SubmitTab({ problemId, latestSubmission, onSubmissionChange }) {
             <select
               className="select"
               value={language}
+              disabled={languages.length === 0}
               onChange={(event) => setLanguage(event.target.value)}
             >
-              {LANGUAGE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
+              {languages.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.display_name}
                 </option>
               ))}
             </select>
           </label>
 
           <textarea
-            value={drafts[language]}
+            value={drafts[language] ?? ""}
             onChange={(event) =>
               setDrafts((current) => ({
                 ...current,
@@ -301,7 +299,11 @@ function SubmitTab({ problemId, latestSubmission, onSubmissionChange }) {
           />
 
           <div className="actions">
-            <button className="primary-button" type="submit" disabled={submitting}>
+            <button
+              className="primary-button"
+              type="submit"
+              disabled={submitting || !language}
+            >
               {submitting ? "Submitting..." : "Submit"}
             </button>
             {submissionError ? <p className="error inline-error">{submissionError}</p> : null}
@@ -399,6 +401,7 @@ function SubmissionHistoryTab({ problemId }) {
               <div className="history-row history-row-muted">
                 <span>{submission.language}</span>
                 <span>{formatExecutionTime(submission.execution_time_ms)}</span>
+                <span>{formatMemoryUsage(submission.memory_usage_kb)}</span>
                 <span>{formatTimestamp(submission.created_at)}</span>
               </div>
             </div>
@@ -414,6 +417,7 @@ function ProblemShell({ problemId, tab }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [latestSubmission, setLatestSubmission] = useState(null);
+  const [languages, setLanguages] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -443,6 +447,29 @@ function ProblemShell({ problemId, tab }) {
       cancelled = true;
     };
   }, [problemId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadLanguages() {
+      try {
+        const data = await fetchJson("/languages");
+        if (!cancelled) {
+          setLanguages(data);
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError.message);
+        }
+      }
+    }
+
+    loadLanguages().catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="page">
@@ -477,6 +504,7 @@ function ProblemShell({ problemId, tab }) {
       {!loading && !error && problem && tab === "submit" ? (
         <SubmitTab
           problemId={problemId}
+          languages={languages}
           latestSubmission={latestSubmission}
           onSubmissionChange={setLatestSubmission}
         />

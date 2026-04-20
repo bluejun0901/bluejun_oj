@@ -49,6 +49,7 @@ class Submission(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="QUEUED")
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
     execution_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    memory_usage_kb: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False

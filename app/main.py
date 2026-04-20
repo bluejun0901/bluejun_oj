@@ -8,12 +8,12 @@ from sqlalchemy.orm import Session, selectinload
 from app.bootstrap import init_db, init_storage, seed_example_problem
 from app.config import settings
 from app.db import SessionLocal, get_db
+from app.languages import get_language, list_languages
 from app.models import Problem, Submission, Testcase
 from app.queue import get_queue
-from app.schemas import ProblemCreate, ProblemOut, SubmissionCreate, SubmissionOut
+from app.schemas import LanguageOut, ProblemCreate, ProblemOut, SubmissionCreate, SubmissionOut
 
 app = FastAPI(title="Minimal OJ")
-SUPPORTED_LANGUAGES = {"cpp", "python"}
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -37,12 +37,15 @@ def health():
 
 
 def normalize_language(language: str) -> str:
-    normalized = language.strip().lower()
-    aliases = {"c++": "cpp", "py": "python"}
-    normalized = aliases.get(normalized, normalized)
-    if normalized not in SUPPORTED_LANGUAGES:
-        raise HTTPException(status_code=400, detail="Supported languages: cpp, python")
-    return normalized
+    try:
+        return get_language(language).key
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/languages", response_model=list[LanguageOut])
+def get_languages():
+    return [LanguageOut.from_spec(spec) for spec in list_languages()]
 
 
 @app.get("/problems", response_model=list[ProblemOut])

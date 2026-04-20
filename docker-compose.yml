@@ -22,6 +22,7 @@ services:
   worker:
     build: .
     command: ["python", "-m", "worker.run_worker"]
+    privileged: true
     environment:
       OJ_DB_URL: sqlite:////data/oj.db
       OJ_DATA_DIR: /data
