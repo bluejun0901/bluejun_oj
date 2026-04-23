@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -51,30 +52,34 @@ def is_memory_limit_exceeded(result: IsolateResult) -> bool:
     return result.meta.get("cg-oom-killed") == "1" or "memory" in message
 
 
-def compile_submission(submission_id: int, box, language) -> bool:
-    compile_command = language.render_compile_command(box.root_dir)
+def _run_command(args: list[str], cwd: Path | str) -> subprocess.CompletedProcess[bytes]:
+    try:
+        return subprocess.run(args, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd)
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"Required command not found: {args[0]}") from exc
+
+
+def compile_submission(submission_id: int, source_path: Path, language) -> bool:
+    compile_command = language.render_compile_command(source_path.parent)
     if compile_command is None:
         return True
+    
+    args = [
+        "timeout",
+        f"{language.compile_timeout_seconds}s",
+    ] + compile_command
+    
+    result = _run_command(args, cwd=source_path.parent)
 
-    update_submission_status(submission_id, "JUDGING", "Compilation started")
-    result = run_in_box(
-        box,
-        compile_command,
-        time_limit_ms=language.compile_timeout_seconds * 1000,
-        wall_time_ms=(language.compile_timeout_seconds + 5) * 1000,
-        memory_limit_mb=max(settings.default_memory_limit_mb, 512),
-        process_limit=language.compile_process_limit,
-        stdout_name="compile.stdout",
-        stderr_name="compile.stderr",
-    )
     if result.returncode != 0:
-        details = summarize_stderr(result) or "Compilation failed"
+        details = result.stderr.decode("utf-8", errors="replace").strip()[:4000] or "Compilation failed"
         update_submission_status(submission_id, "CE", details)
         return False
     return True
 
 
 def judge_testcase(submission_id: int, box, language, testcase, problem) -> tuple[bool, int, int]:
+    print(testcase.input_path, testcase.output_path)
     copy_into_box(box, Path(testcase.input_path), "input.txt")
     result = run_in_box(
         box,
@@ -134,6 +139,11 @@ def judge_testcase(submission_id: int, box, language, testcase, problem) -> tupl
 
     return True, execution_time_ms, memory_usage_kb
 
+def _write_into_folder(target_path: Path | str, content: str) -> Path:
+    target_path = Path(target_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text(content, encoding="utf-8")
+    return target_path
 
 def judge_submission(submission_id: int) -> None:
     with SessionLocal() as db:
@@ -154,11 +164,16 @@ def judge_submission(submission_id: int) -> None:
         update_submission_status(submission_id, "CE", str(exc))
         return
 
+    work_directory = Path(settings.data_dir) / "submissions" / f"{submission_id}"
+
     try:
+        source_path = _write_into_folder(work_directory / language.source_filename, submission.source_code)
+        if not compile_submission(submission_id, source_path, language):
+            return
+
         with isolate_box() as box:
-            write_into_box(box, language.source_filename, submission.source_code)
-            if not compile_submission(submission_id, box, language):
-                return
+            for p in work_directory.iterdir():
+                copy_into_box(box, p, p.name)
 
             max_execution_time_ms = 0
             max_memory_usage_kb = 0

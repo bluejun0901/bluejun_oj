@@ -6,7 +6,7 @@ LANGUAGE = LanguageSpec(
     display_name="Python 3",
     source_filename="main.py",
     compile_command=None,
-    run_command=("python3", "main.py"),
+    run_command=("/usr/local/bin/python", "main.py"),
     default_source="""import sys
 
 

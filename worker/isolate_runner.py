@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from collections.abc import Iterator
 
 from app.config import settings
 
@@ -110,7 +111,7 @@ def _detect_cgroup_support() -> bool:
 
 
 @contextmanager
-def isolate_box() -> IsolateBox:
+def isolate_box() -> Iterator[IsolateBox]:
     box_id = next(_BOX_IDS)
     use_cgroup = _should_use_cgroup()
     init_args = ["isolate", f"--box-id={box_id}"]
@@ -137,13 +138,13 @@ def isolate_box() -> IsolateBox:
 
 
 def copy_into_box(box: IsolateBox, source: Path, target_name: str) -> None:
-    target_path = box.root_dir / target_name
+    target_path = box.root_dir / "box" / target_name
     target_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(source, target_path)
+    shutil.copy2(source, target_path)
 
 
 def write_into_box(box: IsolateBox, target_name: str, content: str) -> Path:
-    target_path = box.root_dir / target_name
+    target_path = box.root_dir / "box" / target_name
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_text(content, encoding="utf-8")
     return target_path
@@ -162,8 +163,8 @@ def run_in_box(
     stderr_name: str = "stderr.txt",
 ) -> IsolateResult:
     meta_path = box.root_dir / "meta.txt"
-    stdout_path = box.root_dir / stdout_name
-    stderr_path = box.root_dir / stderr_name
+    stdout_path = box.root_dir / "box" / stdout_name
+    stderr_path = box.root_dir / "box" / stderr_name
 
     for path in (meta_path, stdout_path, stderr_path):
         if path.exists():
