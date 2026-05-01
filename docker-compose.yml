@@ -21,7 +21,9 @@ services:
       - "6379:6379"
 
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.api
     command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       OJ_DB_URL: postgresql://oj_user:oj_password@postgres:5432/oj_db
@@ -39,9 +41,12 @@ services:
         condition: service_started
 
   worker:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
     command: ["python", "-m", "worker.run_worker"]
     privileged: true
+    cgroup: host
     environment:
       OJ_DB_URL: postgresql://oj_user:oj_password@postgres:5432/oj_db
       OJ_DATA_DIR: /data
@@ -49,6 +54,7 @@ services:
     volumes:
       - ./data:/data
       - .:/app
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
     depends_on:
       postgres:
         condition: service_healthy

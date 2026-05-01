@@ -13,15 +13,16 @@ RUN apt-get update \
     && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/isolate.asc] http://www.ucw.cz/isolate/debian/ bookworm-isolate main" \
         > /etc/apt/sources.list.d/isolate.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends isolate \
+    && apt-get install -y --no-install-recommends build-essential isolate \
     && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential \
-    && rm -rf /var/lib/apt/lists/*
+COPY pyproject.toml /app/
+COPY app /app/app
+COPY worker /app/worker
 
-COPY . /app
+RUN pip install --no-cache-dir .
 
-RUN pip install --no-cache-dir fastapi uvicorn redis sqlalchemy rq==1.15 psycopg2-binary
+RUN chmod +x /app/worker/init_isolate_cgroups.sh
+ENTRYPOINT ["/app/worker/init_isolate_cgroups.sh"]
 
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "worker.run_worker"]

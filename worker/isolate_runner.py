@@ -143,6 +143,45 @@ def copy_into_box(box: IsolateBox, source: Path, target_name: str) -> None:
     shutil.copy2(source, target_path)
 
 
+def copy_tree_into_box(box: IsolateBox, source_dir: Path) -> None:
+    for source_path in sorted(source_dir.rglob("*")):
+        if source_path.is_dir():
+            continue
+        relative_path = source_path.relative_to(source_dir)
+        copy_into_box(box, source_path, str(relative_path))
+
+
+def clear_box_contents(box: IsolateBox) -> None:
+    box_path = box.root_dir / "box"
+    box_path.mkdir(parents=True, exist_ok=True)
+    for child in box_path.iterdir():
+        if child.is_dir() and not child.is_symlink():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+
+
+def copy_box_contents_to_directory(box: IsolateBox, target_dir: Path) -> None:
+    if target_dir.exists():
+        shutil.rmtree(target_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    box_path = box.root_dir / "box"
+    for source_path in sorted(box_path.rglob("*")):
+        relative_path = source_path.relative_to(box_path)
+        target_path = target_dir / relative_path
+        if source_path.is_dir() and not source_path.is_symlink():
+            target_path.mkdir(parents=True, exist_ok=True)
+            continue
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, target_path)
+
+
+def restore_box_contents_from_directory(box: IsolateBox, source_dir: Path) -> None:
+    clear_box_contents(box)
+    copy_tree_into_box(box, source_dir)
+
+
 def write_into_box(box: IsolateBox, target_name: str, content: str) -> Path:
     target_path = box.root_dir / "box" / target_name
     target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -158,6 +197,7 @@ def run_in_box(
     wall_time_ms: int,
     memory_limit_mb: int,
     process_limit: int,
+    env: list[str] | None = None,
     stdin_name: str | None = None,
     stdout_name: str = "stdout.txt",
     stderr_name: str = "stderr.txt",
@@ -184,6 +224,8 @@ def run_in_box(
         args.extend(["--cg", f"--cg-mem={memory_limit_mb * 1024}"])
     else:
         args.append(f"--mem={memory_limit_mb * 1024}")
+    for env_var in env or []:
+        args.append(f"--env={env_var}")
     if stdin_name is not None:
         args.append(f"--stdin={stdin_name}")
     args.extend(["--run", "--", *command])

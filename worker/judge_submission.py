@@ -1,5 +1,6 @@
+from dataclasses import dataclass
 from pathlib import Path
-import subprocess
+import shutil
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -7,15 +8,40 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.db import SessionLocal
 from app.languages import get_language
-from app.models import Problem, Submission
+from app.languages.types import LanguageSpec
+from app.models import Problem, Submission, Testcase
 from worker.isolate_runner import (
+    IsolateBox,
     IsolateResult,
     IsolateUnavailableError,
     copy_into_box,
+    copy_box_contents_to_directory,
+    copy_tree_into_box,
     isolate_box,
+    restore_box_contents_from_directory,
     run_in_box,
-    write_into_box,
 )
+
+
+BOX_WORK_DIR = Path("/box")
+
+
+@dataclass(frozen=True)
+class PreparedSubmission:
+    submission_id: int
+    source_code: str
+    language_key: str
+    work_directory: Path
+    problem: Problem
+    testcases: list[Testcase]
+
+
+@dataclass(frozen=True)
+class JudgeOutcome:
+    status: str
+    details: str
+    execution_time_ms: int | None = None
+    memory_usage_kb: int | None = None
 
 
 def update_submission_status(
@@ -49,103 +75,11 @@ def execution_metrics(result: IsolateResult) -> tuple[int | None, int | None]:
 
 def is_memory_limit_exceeded(result: IsolateResult) -> bool:
     message = (result.meta.get("message") or "").lower()
+    print(message)
     return result.meta.get("cg-oom-killed") == "1" or "memory" in message
 
 
-def _run_command(args: list[str], cwd: Path | str) -> subprocess.CompletedProcess[bytes]:
-    try:
-        return subprocess.run(args, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd)
-    except FileNotFoundError as exc:
-        raise RuntimeError(f"Required command not found: {args[0]}") from exc
-
-
-def compile_submission(submission_id: int, source_path: Path, language) -> bool:
-    compile_command = language.render_compile_command(source_path.parent)
-    if compile_command is None:
-        return True
-    
-    args = [
-        "timeout",
-        f"{language.compile_timeout_seconds}s",
-    ] + compile_command
-    
-    result = _run_command(args, cwd=source_path.parent)
-
-    if result.returncode != 0:
-        details = result.stderr.decode("utf-8", errors="replace").strip()[:4000] or "Compilation failed"
-        update_submission_status(submission_id, "CE", details)
-        return False
-    return True
-
-
-def judge_testcase(submission_id: int, box, language, testcase, problem) -> tuple[bool, int, int]:
-    print(testcase.input_path, testcase.output_path)
-    copy_into_box(box, Path(testcase.input_path), "input.txt")
-    result = run_in_box(
-        box,
-        language.render_run_command(box.root_dir),
-        time_limit_ms=problem.time_limit_ms,
-        wall_time_ms=problem.time_limit_ms + 1000,
-        memory_limit_mb=settings.default_memory_limit_mb,
-        process_limit=language.run_process_limit,
-        stdin_name="input.txt",
-    )
-    execution_time_ms, memory_usage_kb = execution_metrics(result)
-    execution_time_ms = execution_time_ms or 0
-    memory_usage_kb = memory_usage_kb or 0
-
-    if result.status == "TO":
-        update_submission_status(
-            submission_id,
-            "TLE",
-            f"Time limit exceeded on testcase {testcase.order_index}",
-            execution_time_ms,
-            memory_usage_kb,
-        )
-        return False, execution_time_ms, memory_usage_kb
-
-    if is_memory_limit_exceeded(result):
-        update_submission_status(
-            submission_id,
-            "MLE",
-            f"Memory limit exceeded on testcase {testcase.order_index}",
-            execution_time_ms or None,
-            memory_usage_kb or None,
-        )
-        return False, execution_time_ms, memory_usage_kb
-
-    if result.returncode != 0 or result.status in {"RE", "SG", "XX"}:
-        detail = summarize_stderr(result) or f"Runtime error on testcase {testcase.order_index}"
-        update_submission_status(
-            submission_id,
-            "RE",
-            detail,
-            execution_time_ms or None,
-            memory_usage_kb or None,
-        )
-        return False, execution_time_ms, memory_usage_kb
-
-    actual = result.stdout
-    expected = Path(testcase.output_path).read_bytes()
-    if actual != expected:
-        update_submission_status(
-            submission_id,
-            "WA",
-            f"Wrong answer on testcase {testcase.order_index}",
-            execution_time_ms or None,
-            memory_usage_kb or None,
-        )
-        return False, execution_time_ms, memory_usage_kb
-
-    return True, execution_time_ms, memory_usage_kb
-
-def _write_into_folder(target_path: Path | str, content: str) -> Path:
-    target_path = Path(target_path)
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    target_path.write_text(content, encoding="utf-8")
-    return target_path
-
-def judge_submission(submission_id: int) -> None:
+def load_submission_for_judging(submission_id: int) -> PreparedSubmission | None:
     with SessionLocal() as db:
         submission = db.scalar(
             select(Submission)
@@ -153,51 +87,217 @@ def judge_submission(submission_id: int) -> None:
             .options(selectinload(Submission.problem).selectinload(Problem.testcases))
         )
         if not submission:
-            return
+            return None
+
         problem = submission.problem
         testcases = sorted(problem.testcases, key=lambda tc: tc.order_index)
+        work_directory = Path(settings.data_dir) / "submissions" / f"{submission_id}"
+        return PreparedSubmission(
+            submission_id=submission.id,
+            source_code=submission.source_code,
+            language_key=submission.language,
+            work_directory=work_directory,
+            problem=problem,
+            testcases=testcases,
+        )
 
-    update_submission_status(submission_id, "JUDGING", "Preparing execution")
+
+def prepare_work_directory(work_directory: Path) -> None:
+    if work_directory.exists():
+        shutil.rmtree(work_directory)
+    work_directory.mkdir(parents=True, exist_ok=True)
+
+
+def write_source_file(work_directory: Path, source_filename: str, content: str) -> Path:
+    source_path = work_directory / source_filename
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.write_text(content, encoding="utf-8")
+    return source_path
+
+
+def compiled_snapshot_directory(box: IsolateBox) -> Path:
+    return box.root_dir / "compiled-box"
+
+
+def remove_box_path(box: IsolateBox, target_name: str) -> None:
+    target_path = box.root_dir / "box" / target_name
+    if not target_path.exists() and not target_path.is_symlink():
+        return
+    if target_path.is_dir() and not target_path.is_symlink():
+        shutil.rmtree(target_path)
+    else:
+        target_path.unlink()
+
+
+def remove_compile_outputs(box: IsolateBox) -> None:
+    remove_box_path(box, "compile_stdout.txt")
+    remove_box_path(box, "compile_stderr.txt")
+
+
+def apply_outcome(submission_id: int, outcome: JudgeOutcome) -> None:
+    update_submission_status(
+        submission_id,
+        outcome.status,
+        outcome.details,
+        outcome.execution_time_ms,
+        outcome.memory_usage_kb,
+    )
+
+
+def compile_submission(box: IsolateBox, language: LanguageSpec) -> JudgeOutcome | None:
+    compile_command = language.render_compile_command(BOX_WORK_DIR)
+    if compile_command is None:
+        return None
+
+    result = run_in_box(
+        box,
+        compile_command,
+        time_limit_ms=language.compile_timeout_seconds * 1000,
+        wall_time_ms=(language.compile_timeout_seconds + 1) * 1000,
+        memory_limit_mb=settings.default_memory_limit_mb,
+        process_limit=language.compile_process_limit,
+        stdout_name="compile_stdout.txt",
+        stderr_name="compile_stderr.txt",
+        env=["PATH=/usr/bin:/bin"],
+    )
+
+    if result.returncode != 0 or result.status in {"TO", "RE", "SG", "XX"}:
+        details = summarize_stderr(result) or "Compilation failed"
+        if result.status == "TO":
+            details = "Compilation timed out"
+        elif is_memory_limit_exceeded(result):
+            details = "Compilation exceeded memory limit"
+        return JudgeOutcome(status="CE", details=details)
+    return None
+
+
+def stage_testcase_input(box: IsolateBox, testcase: Testcase) -> None:
+    input_path = Path(testcase.input_path)
+    output_path = Path(testcase.output_path)
+    if not input_path.exists():
+        raise RuntimeError(f"Missing testcase input file: {input_path}")
+    if not output_path.exists():
+        raise RuntimeError(f"Missing testcase output file: {output_path}")
+    copy_into_box(box, input_path, "input.txt")
+
+
+def judge_testcase(
+    box: IsolateBox,
+    language: LanguageSpec,
+    testcase: Testcase,
+    problem: Problem,
+) -> JudgeOutcome:
+    result = run_in_box(
+        box,
+        language.render_run_command(BOX_WORK_DIR),
+        time_limit_ms=problem.time_limit_ms,
+        wall_time_ms=problem.time_limit_ms + 1000,
+        memory_limit_mb=settings.default_memory_limit_mb,
+        process_limit=language.run_process_limit,
+        stdin_name="input.txt",
+    )
+    execution_time_ms, memory_usage_kb = execution_metrics(result)
+
+    if result.status == "TO":
+        return JudgeOutcome(
+            status="TLE",
+            details=f"Time limit exceeded on testcase {testcase.order_index}",
+            execution_time_ms=execution_time_ms,
+            memory_usage_kb=memory_usage_kb,
+        )
+
+    if is_memory_limit_exceeded(result):
+        return JudgeOutcome(
+            status="MLE",
+            details=f"Memory limit exceeded on testcase {testcase.order_index}",
+            execution_time_ms=execution_time_ms,
+            memory_usage_kb=memory_usage_kb,
+        )
+
+    if result.returncode != 0 or result.status in {"RE", "SG", "XX"}:
+        detail = summarize_stderr(result) or f"Runtime error on testcase {testcase.order_index}"
+        return JudgeOutcome(
+            status="RE",
+            details=detail,
+            execution_time_ms=execution_time_ms,
+            memory_usage_kb=memory_usage_kb,
+        )
+
+    actual = result.stdout
+    expected = Path(testcase.output_path).read_bytes()
+    if actual != expected:
+        return JudgeOutcome(
+            status="WA",
+            details=f"Wrong answer on testcase {testcase.order_index}",
+            execution_time_ms=execution_time_ms,
+            memory_usage_kb=memory_usage_kb,
+        )
+
+    return JudgeOutcome(
+        status="AC",
+        details=f"Accepted testcase {testcase.order_index}",
+        execution_time_ms=execution_time_ms,
+        memory_usage_kb=memory_usage_kb,
+    )
+
+
+def finalize_success(submission_id: int, testcase_count: int, max_execution_time_ms: int, max_memory_usage_kb: int) -> None:
+    update_submission_status(
+        submission_id,
+        "AC",
+        f"Accepted ({testcase_count} testcases)",
+        max_execution_time_ms or None,
+        max_memory_usage_kb or None,
+    )
+
+
+def judge_submission(submission_id: int) -> None:
+    prepared = load_submission_for_judging(submission_id)
+    if prepared is None:
+        return
+
+    update_submission_status(submission_id, "RUNNING", "Preparing execution")
     try:
-        language = get_language(submission.language)
+        language = get_language(prepared.language_key)
     except ValueError as exc:
         update_submission_status(submission_id, "CE", str(exc))
         return
 
-    work_directory = Path(settings.data_dir) / "submissions" / f"{submission_id}"
-
     try:
-        source_path = _write_into_folder(work_directory / language.source_filename, submission.source_code)
-        if not compile_submission(submission_id, source_path, language):
-            return
+        prepare_work_directory(prepared.work_directory)
+        write_source_file(prepared.work_directory, language.source_filename, prepared.source_code)
 
         with isolate_box() as box:
-            for p in work_directory.iterdir():
-                copy_into_box(box, p, p.name)
+            copy_tree_into_box(box, prepared.work_directory)
+
+            compile_outcome = compile_submission(box, language)
+            if compile_outcome is not None:
+                apply_outcome(submission_id, compile_outcome)
+                return
+
+            remove_compile_outputs(box)
+            snapshot_dir = compiled_snapshot_directory(box)
+            copy_box_contents_to_directory(box, snapshot_dir)
 
             max_execution_time_ms = 0
             max_memory_usage_kb = 0
 
-            for testcase in testcases:
-                accepted, execution_time_ms, memory_usage_kb = judge_testcase(
-                    submission_id,
+            for testcase in prepared.testcases:
+                restore_box_contents_from_directory(box, snapshot_dir)
+                stage_testcase_input(box, testcase)
+                outcome = judge_testcase(
                     box,
                     language,
                     testcase,
-                    problem,
+                    prepared.problem,
                 )
-                max_execution_time_ms = max(max_execution_time_ms, execution_time_ms)
-                max_memory_usage_kb = max(max_memory_usage_kb, memory_usage_kb)
-                if not accepted:
+                max_execution_time_ms = max(max_execution_time_ms, outcome.execution_time_ms or 0)
+                max_memory_usage_kb = max(max_memory_usage_kb, outcome.memory_usage_kb or 0)
+                if outcome.status != "AC":
+                    apply_outcome(submission_id, outcome)
                     return
 
-            update_submission_status(
-                submission_id,
-                "AC",
-                f"Accepted ({len(testcases)} testcases)",
-                max_execution_time_ms or None,
-                max_memory_usage_kb or None,
-            )
+            finalize_success(submission_id, len(prepared.testcases), max_execution_time_ms, max_memory_usage_kb)
     except IsolateUnavailableError as exc:
         update_submission_status(submission_id, "RE", str(exc))
     except RuntimeError as exc:
