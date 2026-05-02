@@ -256,7 +256,7 @@ def judge_submission(submission_id: int) -> None:
     if prepared is None:
         return
 
-    update_submission_status(submission_id, "RUNNING", "Preparing execution")
+    update_submission_status(submission_id, "JUDGING", "Preparing execution")
     try:
         language = get_language(prepared.language_key)
     except ValueError as exc:

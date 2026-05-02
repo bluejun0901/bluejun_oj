@@ -45,6 +45,11 @@ def migrate_existing_db() -> None:
                 connection.execute(
                     text("ALTER TABLE problems ADD COLUMN example_output TEXT NOT NULL DEFAULT ''")
                 )
+            if engine.dialect.name == "postgresql":
+                connection.execute(text("ALTER TABLE problems DROP CONSTRAINT IF EXISTS problems_slug_key"))
+                connection.execute(text("DROP INDEX IF EXISTS ix_problems_slug"))
+                connection.execute(text("DROP INDEX IF EXISTS problems_slug_key"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_problems_slug ON problems (slug)"))
 
         if "submissions" in inspector.get_table_names():
             columns = {column["name"] for column in inspector.get_columns("submissions")}
@@ -79,8 +84,6 @@ def seed_example_problem(db: Session) -> None:
         return
 
     source_dir = Path(__file__).resolve().parent.parent / "problems" / "example_a_plus_b" / "tests"
-    target_dir = settings.data_dir / "problems" / "a-plus-b" / "tests"
-    target_dir.mkdir(parents=True, exist_ok=True)
 
     problem = Problem(
         title="A + B",
@@ -94,6 +97,9 @@ def seed_example_problem(db: Session) -> None:
     )
     db.add(problem)
     db.flush()
+
+    target_dir = settings.data_dir / "problems" / str(problem.id) / "tests"
+    target_dir.mkdir(parents=True, exist_ok=True)
 
     inputs = sorted(source_dir.glob("*.in"))
     for index, input_file in enumerate(inputs, start=1):

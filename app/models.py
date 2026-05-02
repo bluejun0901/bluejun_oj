@@ -11,7 +11,7 @@ class Problem(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
-    slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    slug: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     time_limit_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=1000)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     input_spec: Mapped[str] = mapped_column(Text, nullable=False, default="")

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import rehypeKatex from "rehype-katex";
+import remarkMath from "remark-math";
+import "katex/dist/katex.min.css";
 
 const API_BASE = "/api";
 const FINAL_STATUSES = new Set(["AC", "WA", "TLE", "RE", "CE", "MLE"]);
-
-function normalizeStatus(status) {
-  return status === "JUDGING" ? "RUNNING" : status;
-}
 
 function parseRoute(pathname) {
   if (pathname === "/") {
@@ -138,8 +138,8 @@ function SubmissionCard({ submission }) {
           <p className="eyebrow">Latest Result</p>
           <h2>Submission #{submission.id}</h2>
         </div>
-        <span className={`status status-${normalizeStatus(submission.status).toLowerCase()}`}>
-          {normalizeStatus(submission.status)}
+        <span className={`status status-${submission.status.toLowerCase()}`}>
+          {submission.status}
         </span>
       </div>
       <div className="submission-meta-grid">
@@ -150,6 +150,20 @@ function SubmissionCard({ submission }) {
       </div>
       {submission.details ? <pre className="details">{submission.details}</pre> : null}
     </section>
+  );
+}
+
+function MarkdownBlock({ children, fallback }) {
+  return (
+    <div className="markdown-content">
+      <ReactMarkdown
+        remarkPlugins={[remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        skipHtml
+      >
+        {children || fallback}
+      </ReactMarkdown>
+    </div>
   );
 }
 
@@ -167,15 +181,21 @@ function StatementTab({ problem }) {
       <div className="statement-grid">
         <section className="statement-section">
           <h3>Description</h3>
-          <p>{problem.description || "No description provided."}</p>
+          <MarkdownBlock fallback="No description provided.">
+            {problem.description}
+          </MarkdownBlock>
         </section>
         <section className="statement-section">
           <h3>Input</h3>
-          <p>{problem.input_spec || "No input specification provided."}</p>
+          <MarkdownBlock fallback="No input specification provided.">
+            {problem.input_spec}
+          </MarkdownBlock>
         </section>
         <section className="statement-section">
           <h3>Output</h3>
-          <p>{problem.output_spec || "No output specification provided."}</p>
+          <MarkdownBlock fallback="No output specification provided.">
+            {problem.output_spec}
+          </MarkdownBlock>
         </section>
         <section className="statement-section">
           <h3>Example</h3>
@@ -250,6 +270,7 @@ function SubmitTab({ problemId, languages, latestSubmission, onSubmissionChange 
         }),
       });
       onSubmissionChange(created);
+      navigate(`/problems/${problemId}/submissions`);
     } catch (error) {
       setSubmissionError(error.message);
     } finally {
@@ -394,8 +415,8 @@ function SubmissionHistoryTab({ problemId }) {
             <div className="history-main">
               <div className="history-row">
                 <strong>#{submission.id}</strong>
-                <span className={`status status-${normalizeStatus(submission.status).toLowerCase()}`}>
-                  {normalizeStatus(submission.status)}
+                <span className={`status status-${submission.status.toLowerCase()}`}>
+                  {submission.status}
                 </span>
               </div>
               <div className="history-row history-row-muted">

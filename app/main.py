@@ -66,13 +66,6 @@ def get_problem(problem_id: int, db: Session = Depends(get_db)):
 
 @app.post("/problems", response_model=ProblemOut, status_code=201)
 def create_problem(payload: ProblemCreate, db: Session = Depends(get_db)):
-    existing = db.scalar(select(Problem).where(Problem.slug == payload.slug))
-    if existing:
-        raise HTTPException(status_code=409, detail="Problem slug already exists")
-
-    tests_dir = settings.data_dir / "problems" / payload.slug / "tests"
-    tests_dir.mkdir(parents=True, exist_ok=True)
-
     problem = Problem(
         title=payload.title,
         slug=payload.slug,
@@ -85,6 +78,9 @@ def create_problem(payload: ProblemCreate, db: Session = Depends(get_db)):
     )
     db.add(problem)
     db.flush()
+
+    tests_dir = settings.data_dir / "problems" / str(problem.id) / "tests"
+    tests_dir.mkdir(parents=True, exist_ok=True)
 
     for index, testcase in enumerate(payload.testcases, start=1):
         input_path = tests_dir / f"{index}.in"

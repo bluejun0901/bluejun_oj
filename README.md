@@ -3,7 +3,7 @@
 A small local online judge with:
 
 - FastAPI backend
-- SQLite database
+- PostgreSQL database
 - Redis queue with asynchronous worker
 - React frontend
 - `ioi/isolate` sandboxing with cgroup-backed time and memory accounting
@@ -162,4 +162,4 @@ npm run dev
 4. Click a problem from the list
 5. Open the `statement`, `submit`, and `submission history` tabs on a problem page
 6. Submit any language exposed by `/languages`
-7. Watch the submission status update from `QUEUED` to `RUNNING` and then to the final result
+7. Watch the submission status update from `QUEUED` to `JUDGING` and then to the final result
