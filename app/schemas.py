@@ -3,6 +3,47 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
+class UserSummary(BaseModel):
+    id: int
+    username: str
+    display_name: str | None
+
+    @classmethod
+    def from_model(cls, user):
+        return cls(
+            id=user.id,
+            username=user.username,
+            display_name=user.display_name,
+        )
+
+
+class AuthUserOut(UserSummary):
+    role: str
+
+    @classmethod
+    def from_model(cls, user):
+        return cls(
+            id=user.id,
+            username=user.username,
+            display_name=user.display_name,
+            role=user.role,
+        )
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(
+        min_length=3, max_length=32, pattern=r"^[a-zA-Z0-9_][a-zA-Z0-9_-]*$"
+    )
+    password: str = Field(min_length=8, max_length=128)
+    display_name: str | None = Field(default=None, max_length=100)
+    email: str | None = Field(default=None, max_length=255)
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=32)
+    password: str = Field(min_length=8, max_length=128)
+
+
 class ExampleCreate(BaseModel):
     input: str
     output: str
@@ -36,6 +77,7 @@ class ProblemCreate(BaseModel):
 
 class ProblemOut(BaseModel):
     id: int
+    author: UserSummary | None
     title: str
     slug: str
     time_limit_ms: int
@@ -52,6 +94,7 @@ class ProblemOut(BaseModel):
     def from_model(cls, problem):
         return cls(
             id=problem.id,
+            author=UserSummary.from_model(problem.author) if problem.author else None,
             title=problem.title,
             slug=problem.slug,
             time_limit_ms=problem.time_limit_ms,
@@ -89,6 +132,8 @@ class SubmissionCreate(BaseModel):
 class SubmissionOut(BaseModel):
     id: int
     problem_id: int
+    user: UserSummary | None
+    is_mine: bool = False
     language: str
     status: str
     details: str | None
@@ -100,10 +145,12 @@ class SubmissionOut(BaseModel):
     updated_at: datetime
 
     @classmethod
-    def from_model(cls, submission):
+    def from_model(cls, submission, *, viewer_id: int | None = None):
         return cls(
             id=submission.id,
             problem_id=submission.problem_id,
+            user=UserSummary.from_model(submission.user) if submission.user else None,
+            is_mine=viewer_id is not None and submission.user_id == viewer_id,
             language=submission.language,
             status=submission.status,
             details=submission.details,

@@ -76,9 +76,13 @@ def _parse_meta(meta_path: Path) -> dict[str, str]:
 
 def _run_isolate_command(args: list[str]) -> subprocess.CompletedProcess[bytes]:
     try:
-        return subprocess.run(args, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return subprocess.run(
+            args, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
     except FileNotFoundError as exc:
-        raise IsolateUnavailableError("isolate is not installed in the worker environment") from exc
+        raise IsolateUnavailableError(
+            "isolate is not installed in the worker environment"
+        ) from exc
 
 
 def _is_cgroup_init_error(stderr: bytes) -> bool:
@@ -100,14 +104,20 @@ def _should_use_cgroup() -> bool:
 @lru_cache(maxsize=1)
 def _detect_cgroup_support() -> bool:
     probe_box_id = 999
-    init_result = _run_isolate_command(["isolate", f"--box-id={probe_box_id}", "--cg", "--init"])
+    init_result = _run_isolate_command(
+        ["isolate", f"--box-id={probe_box_id}", "--cg", "--init"]
+    )
     if init_result.returncode == 0:
-        _run_isolate_command(["isolate", f"--box-id={probe_box_id}", "--cg", "--cleanup"])
+        _run_isolate_command(
+            ["isolate", f"--box-id={probe_box_id}", "--cg", "--cleanup"]
+        )
         return True
     if _is_cgroup_init_error(init_result.stderr):
         return False
     detail = init_result.stderr.decode("utf-8", errors="replace").strip()
-    raise RuntimeError(f"failed to initialize isolate sandbox: {detail or 'unknown error'}")
+    raise RuntimeError(
+        f"failed to initialize isolate sandbox: {detail or 'unknown error'}"
+    )
 
 
 @contextmanager
@@ -121,7 +131,9 @@ def isolate_box() -> Iterator[IsolateBox]:
     init_result = _run_isolate_command(init_args)
     if init_result.returncode != 0:
         detail = init_result.stderr.decode("utf-8", errors="replace").strip()
-        raise RuntimeError(f"failed to initialize isolate sandbox: {detail or 'unknown error'}")
+        raise RuntimeError(
+            f"failed to initialize isolate sandbox: {detail or 'unknown error'}"
+        )
 
     root_dir = Path(init_result.stdout.decode("utf-8", errors="replace").strip())
     if not root_dir.exists():

@@ -32,7 +32,11 @@ def resolve_checker_source_dir(problem: Problem) -> Path:
     candidates: list[Path] = []
     if problem.checker_source_path:
         configured_path = Path(problem.checker_source_path)
-        candidates.append(configured_path if configured_path.is_absolute() else REPO_ROOT / configured_path)
+        candidates.append(
+            configured_path
+            if configured_path.is_absolute()
+            else REPO_ROOT / configured_path
+        )
 
     slug_underscored = problem.slug.replace("-", "_")
     candidates.extend(
@@ -47,7 +51,9 @@ def resolve_checker_source_dir(problem: Problem) -> Path:
         if candidate.is_dir():
             return candidate
     searched = ", ".join(str(path) for path in candidates)
-    raise CheckerCompileError(f"Checker source directory not found for problem '{problem.slug}'. Searched: {searched}")
+    raise CheckerCompileError(
+        f"Checker source directory not found for problem '{problem.slug}'. Searched: {searched}"
+    )
 
 
 def checker_source_file(problem: Problem) -> Path:
@@ -76,7 +82,9 @@ def compile_checker(problem: Problem) -> Path:
     ]
     result = subprocess.run(command, check=False, capture_output=True, text=True)
     if result.returncode != 0:
-        details = (result.stderr or result.stdout).strip() or "unknown checker compilation error"
+        details = (
+            result.stderr or result.stdout
+        ).strip() or "unknown checker compilation error"
         raise CheckerCompileError(f"Failed to compile checker: {details}")
 
     output_path.chmod(0o755)

@@ -6,6 +6,7 @@ A small local online judge with:
 - PostgreSQL database
 - Redis queue with asynchronous worker
 - React frontend
+- User accounts with session-based authentication
 - `ioi/isolate` sandboxing with cgroup-backed time and memory accounting
 - Language registry with one judge definition per file
 - Trusted `testlib.h`-based custom checker execution outside isolate
@@ -15,8 +16,13 @@ A small local online judge with:
 ## Endpoints
 
 - `GET /health`
+- `POST /auth/register`
+- `POST /auth/login`
+- `POST /auth/logout`
+- `GET /auth/me`
 - `GET /problems`
 - `GET /problems/{id}`
+- `GET /problems/{id}/manage`
 - `GET /problems/{id}/submissions`
 - `GET /languages`
 - `POST /problems`
@@ -24,13 +30,53 @@ A small local online judge with:
 - `POST /submissions`
 - `GET /submissions/{id}`
 
+## Quick Run
+1. Copy `.env.example` to `.env.dev` and configure the environment variables:
+
+```bash
+cp .env.example .env.dev
+```
+
+2. Start backend infrastructure:
+
+```bash
+docker compose up --build
+```
+
+3. Start the frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+3. Open `http://localhost:5173`
+4. Click a problem from the list
+5. Open the `statement`, `submit`, and `submission history` tabs on a problem page
+6. Submit any language exposed by `/languages`
+7. Watch the submission status update from `QUEUED` to `JUDGING` and then to the final result
+
 ## Run with Docker Compose
+
+1. Copy `.env.example` to `.env.dev` and configure the environment variables:
+
+```bash
+cp .env.example .env.dev
+```
+
+2. Run the application:
 
 ```bash
 docker compose up --build
 ```
 
 The API will be available at `http://localhost:8000`.
+
+Default bootstrap admin credentials in `docker-compose.yml`:
+
+- username: `admin`
+- password: `adminpassword`
 
 An example problem is seeded automatically:
 
@@ -39,17 +85,21 @@ An example problem is seeded automatically:
 
 ## Full Flow
 
-1. List problems:
+1. Register or log in.
+
+2. List problems:
 
 ```bash
 curl http://localhost:8000/problems
 ```
 
-2. Submit a C++ solution:
+3. Submit a C++ solution:
 
 ```bash
 curl -X POST http://localhost:8000/submissions \
+  -b cookie.txt -c cookie.txt \
   -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $(grep oj_csrf cookie.txt | awk '{print $7}')" \
   -d @- <<'JSON'
 {
   "problem_id": 1,
@@ -59,17 +109,47 @@ curl -X POST http://localhost:8000/submissions \
 JSON
 ```
 
-3. Poll the result:
+4. Poll the result:
 
 ```bash
 curl http://localhost:8000/submissions/1
 ```
 
+## Authentication
+
+Register:
+
+```bash
+curl -X POST http://localhost:8000/auth/register \
+  -c cookie.txt \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"demo_user","password":"strongpass123","display_name":"Demo"}'
+```
+
+Login:
+
+```bash
+curl -X POST http://localhost:8000/auth/login \
+  -b cookie.txt -c cookie.txt \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"demo_user","password":"strongpass123"}'
+```
+
+Check session:
+
+```bash
+curl http://localhost:8000/auth/me -b cookie.txt
+```
+
+State-changing authenticated requests must include the `X-CSRF-Token` header that matches the `oj_csrf` cookie.
+
 ## Create a Problem
 
 ```bash
 curl -X POST http://localhost:8000/problems \
+  -b cookie.txt -c cookie.txt \
   -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $(grep oj_csrf cookie.txt | awk '{print $7}')" \
   -d @- <<'JSON'
 {
   "title": "Print 42",
@@ -151,24 +231,10 @@ Then open `http://localhost:5173`.
 
 The browser app expects the backend API at `http://localhost:8000`, so start the backend and worker first.
 
-## UI Flow
+The frontend now:
 
-1. Start backend infrastructure:
-
-```bash
-docker compose up --build
-```
-
-2. Start the frontend:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-3. Open `http://localhost:5173`
-4. Click a problem from the list
-5. Open the `statement`, `submit`, and `submission history` tabs on a problem page
-6. Submit any language exposed by `/languages`
-7. Watch the submission status update from `QUEUED` to `JUDGING` and then to the final result
+- keeps public problem browsing open
+- requires login for submissions
+- shows login/register flows
+- supports problem creation and author/admin editing
+- sends cookies and CSRF headers automatically

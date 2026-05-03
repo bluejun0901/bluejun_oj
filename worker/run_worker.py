@@ -3,6 +3,7 @@ from rq import Worker, Queue
 
 from app.config import settings
 
+
 def main() -> None:
     redis_conn = Redis.from_url(settings.redis_url)
 

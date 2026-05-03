@@ -13,6 +13,6 @@ COPY app /app/app
 COPY worker /app/worker
 COPY problems /app/problems
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir . && pip install argon2-cffi
 
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

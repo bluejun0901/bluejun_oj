@@ -22,9 +22,7 @@ def _load_specs() -> dict[str, LanguageSpec]:
 
 LANGUAGES = _load_specs()
 LANGUAGE_ALIASES = {
-    alias: spec.key
-    for spec in LANGUAGES.values()
-    for alias in spec.aliases
+    alias: spec.key for spec in LANGUAGES.values() for alias in spec.aliases
 }
 
 

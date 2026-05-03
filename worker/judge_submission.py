@@ -228,16 +228,28 @@ def run_checker(
         command.extend(["--group", str(subtask_id)])
 
     try:
-        result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=5)
+        result = subprocess.run(
+            command, check=False, capture_output=True, text=True, timeout=5
+        )
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(f"Checker timed out for testcase {testcase.order_index}") from exc
+        raise RuntimeError(
+            f"Checker timed out for testcase {testcase.order_index}"
+        ) from exc
 
     detail = checker_message(result)
     if result.returncode == 0:
-        return CheckerOutcome(status="AC", details=detail or f"Accepted testcase {testcase.order_index}")
+        return CheckerOutcome(
+            status="AC", details=detail or f"Accepted testcase {testcase.order_index}"
+        )
     if result.returncode in {1, 2} or result.returncode >= 50:
-        return CheckerOutcome(status="WA", details=detail or f"Wrong answer on testcase {testcase.order_index}")
-    return CheckerOutcome(status="RE", details=detail or f"Checker failed on testcase {testcase.order_index}")
+        return CheckerOutcome(
+            status="WA",
+            details=detail or f"Wrong answer on testcase {testcase.order_index}",
+        )
+    return CheckerOutcome(
+        status="RE",
+        details=detail or f"Checker failed on testcase {testcase.order_index}",
+    )
 
 
 def judge_testcase(
@@ -275,7 +287,10 @@ def judge_testcase(
         )
 
     if result.returncode != 0 or result.status in {"RE", "SG", "XX"}:
-        detail = summarize_stderr(result) or f"Runtime error on testcase {testcase.order_index}"
+        detail = (
+            summarize_stderr(result)
+            or f"Runtime error on testcase {testcase.order_index}"
+        )
         return JudgeOutcome(
             status="RE",
             details=detail,
@@ -374,7 +389,13 @@ def finalize_subtask_outcome(
     elif earned_score > 0:
         status = "PAC"
     elif failures:
-        status = min(failures, key=lambda subtask: failure_priority(subtask.failure_status or "WA")).failure_status or "WA"
+        status = (
+            min(
+                failures,
+                key=lambda subtask: failure_priority(subtask.failure_status or "WA"),
+            ).failure_status
+            or "WA"
+        )
     else:
         status = "WA"
 
@@ -412,7 +433,9 @@ def judge_submission(submission_id: int) -> None:
 
     try:
         prepare_work_directory(prepared.work_directory)
-        write_source_file(prepared.work_directory, language.source_filename, prepared.source_code)
+        write_source_file(
+            prepared.work_directory, language.source_filename, prepared.source_code
+        )
 
         with isolate_box() as box:
             copy_tree_into_box(box, prepared.work_directory)
@@ -428,7 +451,9 @@ def judge_submission(submission_id: int) -> None:
 
             max_execution_time_ms = 0
             max_memory_usage_kb = 0
-            subtasks = parse_subtasks(prepared.problem) if prepared.problem.use_subtask else []
+            subtasks = (
+                parse_subtasks(prepared.problem) if prepared.problem.use_subtask else []
+            )
             subtask_by_id = {subtask.subtask_id: subtask for subtask in subtasks}
 
             for testcase in prepared.testcases:
@@ -440,15 +465,21 @@ def judge_submission(submission_id: int) -> None:
                     testcase,
                     prepared.problem,
                 )
-                max_execution_time_ms = max(max_execution_time_ms, outcome.execution_time_ms or 0)
-                max_memory_usage_kb = max(max_memory_usage_kb, outcome.memory_usage_kb or 0)
+                max_execution_time_ms = max(
+                    max_execution_time_ms, outcome.execution_time_ms or 0
+                )
+                max_memory_usage_kb = max(
+                    max_memory_usage_kb, outcome.memory_usage_kb or 0
+                )
                 if not prepared.problem.use_subtask and outcome.status != "AC":
                     apply_outcome(submission_id, outcome)
                     return
                 if not prepared.problem.use_subtask:
                     continue
 
-                testcase_subtasks = subtask_cases(prepared.problem, testcase.order_index)
+                testcase_subtasks = subtask_cases(
+                    prepared.problem, testcase.order_index
+                )
                 if outcome.status != "AC":
                     for subtask_id in testcase_subtasks:
                         subtask = subtask_by_id[subtask_id]
@@ -482,7 +513,12 @@ def judge_submission(submission_id: int) -> None:
                 )
                 return
 
-            finalize_success(submission_id, len(prepared.testcases), max_execution_time_ms, max_memory_usage_kb)
+            finalize_success(
+                submission_id,
+                len(prepared.testcases),
+                max_execution_time_ms,
+                max_memory_usage_kb,
+            )
     except IsolateUnavailableError as exc:
         update_submission_status(submission_id, "RE", str(exc))
     except RuntimeError as exc:

@@ -7,3 +7,4 @@ dist/
 data/
 problems/
 *.egg-info/
+.env.dev

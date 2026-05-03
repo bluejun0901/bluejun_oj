@@ -5,7 +5,15 @@ LANGUAGE = LanguageSpec(
     key="cpp",
     display_name="C++17",
     source_filename="main.cpp",
-    compile_command=("/usr/bin/g++", "-std=c++17", "-O2", "-pipe", "-o", "main", "main.cpp"),
+    compile_command=(
+        "/usr/bin/g++",
+        "-std=c++17",
+        "-O2",
+        "-pipe",
+        "-o",
+        "main",
+        "main.cpp",
+    ),
     run_command=("./main",),
     default_source="""#include <iostream>
 

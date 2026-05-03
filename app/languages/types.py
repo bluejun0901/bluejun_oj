@@ -27,7 +27,13 @@ class LanguageSpec:
     def render_compile_command(self, work_dir: Path) -> list[str] | None:
         if self.compile_command is None:
             return None
-        return [part.format(work_dir=work_dir, source=self.source_filename) for part in self.compile_command]
+        return [
+            part.format(work_dir=work_dir, source=self.source_filename)
+            for part in self.compile_command
+        ]
 
     def render_run_command(self, work_dir: Path) -> list[str]:
-        return [part.format(work_dir=work_dir, source=self.source_filename) for part in self.run_command]
+        return [
+            part.format(work_dir=work_dir, source=self.source_filename)
+            for part in self.run_command
+        ]
