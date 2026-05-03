@@ -5,7 +5,7 @@ import remarkMath from "remark-math";
 import "katex/dist/katex.min.css";
 
 const API_BASE = "/api";
-const FINAL_STATUSES = new Set(["AC", "WA", "TLE", "RE", "CE", "MLE"]);
+const FINAL_STATUSES = new Set(["AC", "PAC", "WA", "TLE", "RE", "CE", "MLE"]);
 
 function parseRoute(pathname) {
   if (pathname === "/") {
@@ -72,6 +72,24 @@ function formatMemoryUsage(value) {
   return `${value} KB`;
 }
 
+function formatScore(score, maxScore) {
+  if (typeof score !== "number" || typeof maxScore !== "number") {
+    return null;
+  }
+  return `${score}/${maxScore}`;
+}
+
+function sortedSubtasks(subtaskInfo) {
+  return Object.entries(subtaskInfo ?? {}).sort(([left], [right]) => {
+    const leftNumber = Number(left);
+    const rightNumber = Number(right);
+    if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
+      return leftNumber - rightNumber;
+    }
+    return left.localeCompare(right);
+  });
+}
+
 function TabLink({ active, children, href }) {
   return (
     <a
@@ -131,6 +149,8 @@ function SubmissionCard({ submission }) {
     return null;
   }
 
+  const scoreText = formatScore(submission.score, submission.max_score);
+
   return (
     <section className="panel">
       <div className="panel-header">
@@ -144,6 +164,7 @@ function SubmissionCard({ submission }) {
       </div>
       <div className="submission-meta-grid">
         <p className="meta">Language: {submission.language}</p>
+        {scoreText ? <p className="meta">Score: {scoreText}</p> : null}
         <p className="meta">Execution: {formatExecutionTime(submission.execution_time_ms)}</p>
         <p className="meta">Memory: {formatMemoryUsage(submission.memory_usage_kb)}</p>
         <p className="meta">Submitted: {formatTimestamp(submission.created_at)}</p>
@@ -168,6 +189,8 @@ function MarkdownBlock({ children, fallback }) {
 }
 
 function StatementTab({ problem }) {
+  const subtasks = sortedSubtasks(problem.subtask_info);
+
   return (
     <section className="panel">
       <div className="panel-header">
@@ -175,7 +198,9 @@ function StatementTab({ problem }) {
           <p className="eyebrow">Statement</p>
           <h2>{problem.title}</h2>
         </div>
-        <p className="meta">{problem.time_limit_ms} ms time limit</p>
+        <p className="meta">
+          {problem.time_limit_ms} ms time limit · {problem.memory_limit} MB memory limit
+        </p>
       </div>
 
       <div className="statement-grid">
@@ -198,18 +223,65 @@ function StatementTab({ problem }) {
           </MarkdownBlock>
         </section>
         <section className="statement-section">
-          <h3>Example</h3>
-          <div className="example-grid">
-            <div className="example-box">
-              <span className="example-label">Input</span>
-              <pre>{problem.example_input || "—"}</pre>
-            </div>
-            <div className="example-box">
-              <span className="example-label">Output</span>
-              <pre>{problem.example_output || "—"}</pre>
-            </div>
+          <h3>Examples</h3>
+          <div className="examples-stack">
+            {problem.examples?.length ? (
+              problem.examples.map((example, index) => (
+                <div className="example-pair" key={`example-${index + 1}`}>
+                  <p className="example-title">Example {index + 1}</p>
+                  <div className="example-grid">
+                    <div className="example-box">
+                      <span className="example-label">Input</span>
+                      <pre>{example.input || "—"}</pre>
+                    </div>
+                    <div className="example-box">
+                      <span className="example-label">Output</span>
+                      <pre>{example.output || "—"}</pre>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="example-grid">
+                <div className="example-box">
+                  <span className="example-label">Input</span>
+                  <pre>—</pre>
+                </div>
+                <div className="example-box">
+                  <span className="example-label">Output</span>
+                  <pre>—</pre>
+                </div>
+              </div>
+            )}
           </div>
         </section>
+        {problem.use_subtask ? (
+          <section className="statement-section">
+            <h3>Subtasks</h3>
+            <div className="subtask-table-wrapper">
+              <table className="subtask-table">
+                <thead>
+                  <tr>
+                    <th>subtask</th>
+                    <th>score</th>
+                    <th>description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {subtasks.map(([subtaskId, subtask]) => (
+                    <tr key={subtaskId}>
+                      <td>{`subtask ${subtaskId}`}</td>
+                      <td>{subtask.score}</td>
+                      <td>
+                        <MarkdownBlock fallback="—">{subtask.desc}</MarkdownBlock>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : null}
       </div>
     </section>
   );
@@ -421,6 +493,7 @@ function SubmissionHistoryTab({ problemId }) {
               </div>
               <div className="history-row history-row-muted">
                 <span>{submission.language}</span>
+                <span>{formatScore(submission.score, submission.max_score) ?? "—"}</span>
                 <span>{formatExecutionTime(submission.execution_time_ms)}</span>
                 <span>{formatMemoryUsage(submission.memory_usage_kb)}</span>
                 <span>{formatTimestamp(submission.created_at)}</span>
@@ -503,7 +576,11 @@ function ProblemShell({ problemId, tab }) {
           <p className="eyebrow">Problem #{problemId}</p>
           <h1>{problem?.title ?? "Loading problem..."}</h1>
         </div>
-        {problem ? <p className="muted">{problem.testcase_count} testcases</p> : null}
+        {problem ? (
+          <p className="muted">
+            {problem.testcase_count} testcases · {problem.time_limit_ms} ms · {problem.memory_limit} MB
+          </p>
+        ) : null}
       </section>
 
       <nav className="tabs" aria-label="Problem navigation">

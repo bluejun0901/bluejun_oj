@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -13,11 +13,14 @@ class Problem(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     time_limit_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=1000)
+    memory_limit: Mapped[int] = mapped_column(Integer, nullable=False, default=256)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     input_spec: Mapped[str] = mapped_column(Text, nullable=False, default="")
     output_spec: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    example_input: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    example_output: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    examples: Mapped[list[dict[str, str]]] = mapped_column(JSON, nullable=False, default=list)
+    use_subtask: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    subtask_info: Mapped[dict[str, dict[str, object]]] = mapped_column(JSON, nullable=False, default=dict)
+    checker_source_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 
     testcases: Mapped[list["Testcase"]] = relationship(
         back_populates="problem",
@@ -50,6 +53,8 @@ class Submission(Base):
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
     execution_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     memory_usage_kb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc), nullable=False

@@ -197,6 +197,19 @@ select {
   gap: 12px;
 }
 
+.examples-stack,
+.example-pair {
+  display: grid;
+  gap: 12px;
+}
+
+.example-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #4d5158;
+}
+
 .markdown-content {
   min-width: 0;
   color: #15171a;
@@ -401,10 +414,15 @@ select {
   color: #107c41;
 }
 
+.status-pac {
+  color: #005ea6;
+}
+
 .status-wa,
 .status-tle,
 .status-re,
-.status-ce {
+.status-ce,
+.status-mle {
   color: #b42318;
 }
 
@@ -442,6 +460,28 @@ select {
   justify-content: flex-start;
   color: #6c6f75;
   font-size: 0.95rem;
+}
+
+.subtask-table-wrapper {
+  overflow-x: auto;
+}
+
+.subtask-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.subtask-table th,
+.subtask-table td {
+  padding: 12px;
+  border: 1px solid #d9d9d4;
+  vertical-align: top;
+  text-align: left;
+}
+
+.subtask-table th {
+  background: #ececea;
 }
 
 .error {

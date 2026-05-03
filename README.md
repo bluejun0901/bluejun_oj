@@ -8,8 +8,9 @@ A small local online judge with:
 - React frontend
 - `ioi/isolate` sandboxing with cgroup-backed time and memory accounting
 - Language registry with one judge definition per file
-- Exact output comparison
-- Standard results: `AC`, `WA`, `TLE`, `RE`, `CE`, `MLE`
+- Trusted `testlib.h`-based custom checker execution outside isolate
+- Optional subtask scoring with `PAC` partial results
+- Standard results: `AC`, `PAC`, `WA`, `TLE`, `RE`, `CE`, `MLE`
 
 ## Endpoints
 
@@ -19,6 +20,7 @@ A small local online judge with:
 - `GET /problems/{id}/submissions`
 - `GET /languages`
 - `POST /problems`
+- `PUT /problems/{id}`
 - `POST /submissions`
 - `GET /submissions/{id}`
 
@@ -73,17 +75,24 @@ curl -X POST http://localhost:8000/problems \
   "title": "Print 42",
   "slug": "print-42",
   "time_limit_ms": 1000,
+  "memory_limit": 256,
   "description": "Print the number 42.",
   "input_spec": "There is no input.",
   "output_spec": "Print 42 followed by a newline.",
-  "example_input": "",
-  "example_output": "42\n",
+  "examples": [
+    {"input": "", "output": "42\n"}
+  ],
+  "use_subtask": false,
+  "subtask_info": {},
+  "checker_source_path": "problems/print_42",
   "testcases": [
     {"input": "", "output": "42\n"}
   ]
 }
 JSON
 ```
+
+Each problem now expects a `checker.cpp` under the configured `checker_source_path` (or one of the built-in problem-directory conventions). The API compiles that checker with `-I./source` and stores the binary in `data/problems/<problem_id>/checker`.
 
 ## Python Submission Example
 

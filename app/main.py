@@ -1,15 +1,13 @@
-from pathlib import Path
-
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.bootstrap import init_db, init_storage, seed_example_problem
-from app.config import settings
 from app.db import SessionLocal, get_db
 from app.languages import get_language, list_languages
 from app.models import Problem, Submission, Testcase
+from app.problem_assets import CheckerCompileError, compile_checker, reset_problem_tests_directory
 from app.queue import get_queue
 from app.schemas import LanguageOut, ProblemCreate, ProblemOut, SubmissionCreate, SubmissionOut
 
@@ -64,23 +62,46 @@ def get_problem(problem_id: int, db: Session = Depends(get_db)):
     return ProblemOut.from_model(problem)
 
 
-@app.post("/problems", response_model=ProblemOut, status_code=201)
-def create_problem(payload: ProblemCreate, db: Session = Depends(get_db)):
-    problem = Problem(
-        title=payload.title,
-        slug=payload.slug,
-        time_limit_ms=payload.time_limit_ms,
-        description=payload.description,
-        input_spec=payload.input_spec,
-        output_spec=payload.output_spec,
-        example_input=payload.example_input,
-        example_output=payload.example_output,
-    )
-    db.add(problem)
-    db.flush()
+def validate_subtask_info(payload: ProblemCreate) -> None:
+    if not payload.use_subtask:
+        return
 
-    tests_dir = settings.data_dir / "problems" / str(problem.id) / "tests"
-    tests_dir.mkdir(parents=True, exist_ok=True)
+    if not payload.subtask_info:
+        raise HTTPException(status_code=400, detail="Subtask info is required when use_subtask is enabled")
+
+    testcase_count = len(payload.testcases)
+    for subtask_id, subtask in payload.subtask_info.items():
+        if not subtask.cases:
+            raise HTTPException(status_code=400, detail=f"Subtask {subtask_id} must contain at least one testcase")
+        for case_id in subtask.cases:
+            if case_id < 1 or case_id > testcase_count:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Subtask {subtask_id} references invalid testcase {case_id}",
+                )
+
+
+def populate_problem(problem: Problem, payload: ProblemCreate) -> None:
+    problem.title = payload.title
+    problem.slug = payload.slug
+    problem.time_limit_ms = payload.time_limit_ms
+    problem.memory_limit = payload.memory_limit
+    problem.description = payload.description
+    problem.input_spec = payload.input_spec
+    problem.output_spec = payload.output_spec
+    problem.examples = [example.model_dump() for example in payload.examples]
+    problem.use_subtask = payload.use_subtask
+    problem.subtask_info = {
+        subtask_id: subtask.model_dump() for subtask_id, subtask in payload.subtask_info.items()
+    }
+    problem.checker_source_path = payload.checker_source_path
+
+
+def replace_problem_testcases(problem: Problem, payload: ProblemCreate, db: Session) -> None:
+    tests_dir = reset_problem_tests_directory(problem.id)
+    for testcase in list(problem.testcases):
+        db.delete(testcase)
+    db.flush()
 
     for index, testcase in enumerate(payload.testcases, start=1):
         input_path = tests_dir / f"{index}.in"
@@ -95,6 +116,46 @@ def create_problem(payload: ProblemCreate, db: Session = Depends(get_db)):
                 output_path=str(output_path),
             )
         )
+
+
+@app.post("/problems", response_model=ProblemOut, status_code=201)
+def create_problem(payload: ProblemCreate, db: Session = Depends(get_db)):
+    validate_subtask_info(payload)
+    problem = Problem()
+    populate_problem(problem, payload)
+    db.add(problem)
+    db.flush()
+    replace_problem_testcases(problem, payload, db)
+    try:
+        compile_checker(problem)
+    except CheckerCompileError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    db.commit()
+    db.refresh(problem)
+    problem = db.scalar(
+        select(Problem).where(Problem.id == problem.id).options(selectinload(Problem.testcases))
+    )
+    return ProblemOut.from_model(problem)
+
+
+@app.put("/problems/{problem_id}", response_model=ProblemOut)
+def update_problem(problem_id: int, payload: ProblemCreate, db: Session = Depends(get_db)):
+    problem = db.scalar(
+        select(Problem).where(Problem.id == problem_id).options(selectinload(Problem.testcases))
+    )
+    if not problem:
+        raise HTTPException(status_code=404, detail="Problem not found")
+
+    validate_subtask_info(payload)
+    populate_problem(problem, payload)
+    replace_problem_testcases(problem, payload, db)
+    try:
+        compile_checker(problem)
+    except CheckerCompileError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     db.commit()
     db.refresh(problem)
