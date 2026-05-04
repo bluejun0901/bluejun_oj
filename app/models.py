@@ -10,9 +10,7 @@ class Problem(Base):
     __tablename__ = "problems"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    author_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id"), index=True, nullable=True
-    )
+    author_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     time_limit_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=1000)
@@ -20,13 +18,9 @@ class Problem(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     input_spec: Mapped[str] = mapped_column(Text, nullable=False, default="")
     output_spec: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    examples: Mapped[list[dict[str, str]]] = mapped_column(
-        JSON, nullable=False, default=list
-    )
+    examples: Mapped[list[dict[str, str]]] = mapped_column(JSON, nullable=False, default=list)
     use_subtask: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    subtask_info: Mapped[dict[str, dict[str, object]]] = mapped_column(
-        JSON, nullable=False, default=dict
-    )
+    subtask_info: Mapped[dict[str, dict[str, object]]] = mapped_column(JSON, nullable=False, default=dict)
     checker_source_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 
     testcases: Mapped[list["Testcase"]] = relationship(
@@ -55,9 +49,7 @@ class Submission(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     problem_id: Mapped[int] = mapped_column(ForeignKey("problems.id"), index=True)
-    user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id"), index=True, nullable=True
-    )
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
     language: Mapped[str] = mapped_column(String(32), nullable=False)
     source_code: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="QUEUED")
@@ -84,9 +76,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    username: Mapped[str] = mapped_column(
-        String(50), nullable=False, unique=True, index=True
-    )
+    username: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -114,22 +104,14 @@ class UserSession(Base):
     __tablename__ = "sessions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id"), nullable=False, index=True
-    )
-    session_token_hash: Mapped[str] = mapped_column(
-        String(64), nullable=False, unique=True, index=True
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    session_token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     csrf_token: Mapped[str] = mapped_column(String(128), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.now(timezone.utc), nullable=False
     )
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    last_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ip: Mapped[str | None] = mapped_column(String(128), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
 

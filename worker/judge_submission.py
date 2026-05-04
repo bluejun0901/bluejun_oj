@@ -1,7 +1,7 @@
-from dataclasses import dataclass
-from pathlib import Path
 import shutil
 import subprocess
+from dataclasses import dataclass
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -16,14 +16,13 @@ from worker.isolate_runner import (
     IsolateBox,
     IsolateResult,
     IsolateUnavailableError,
-    copy_into_box,
     copy_box_contents_to_directory,
+    copy_into_box,
     copy_tree_into_box,
     isolate_box,
     restore_box_contents_from_directory,
     run_in_box,
 )
-
 
 BOX_WORK_DIR = Path("/box")
 
@@ -228,31 +227,25 @@ def run_checker(
         command.extend(["--group", str(subtask_id)])
 
     try:
-        result = subprocess.run(
-            command, check=False, capture_output=True, text=True, timeout=5
-        )
+        result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=5)
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(
-            f"Checker timed out for testcase {testcase.order_index}"
-        ) from exc
+        raise RuntimeError(f"Checker timed out for testcase {testcase.order_index}") from exc
 
     detail = checker_message(result)
     if result.returncode == 0:
-        return CheckerOutcome(
-            status="AC", details=detail or f"Accepted testcase {testcase.order_index}"
-        )
+        return CheckerOutcome(status="AC", details=detail or "Accepted")
     if result.returncode in {1, 2} or result.returncode >= 50:
         return CheckerOutcome(
             status="WA",
-            details=detail or f"Wrong answer on testcase {testcase.order_index}",
+            details=detail or "Wrong answer",
         )
     return CheckerOutcome(
         status="RE",
-        details=detail or f"Checker failed on testcase {testcase.order_index}",
+        details=detail or "Checker failed",
     )
 
 
-def judge_testcase(
+def run_testcase_with_limit(
     box: IsolateBox,
     language: LanguageSpec,
     testcase: Testcase,
@@ -273,7 +266,7 @@ def judge_testcase(
     if result.status == "TO":
         return JudgeOutcome(
             status="TLE",
-            details=f"Time limit exceeded on testcase {testcase.order_index}",
+            details="Time limit exceeded",
             execution_time_ms=execution_time_ms,
             memory_usage_kb=memory_usage_kb,
         )
@@ -281,16 +274,13 @@ def judge_testcase(
     if is_memory_limit_exceeded(result):
         return JudgeOutcome(
             status="MLE",
-            details=f"Memory limit exceeded on testcase {testcase.order_index}",
+            details="Memory limit exceeded",
             execution_time_ms=execution_time_ms,
             memory_usage_kb=memory_usage_kb,
         )
 
     if result.returncode != 0 or result.status in {"RE", "SG", "XX"}:
-        detail = (
-            summarize_stderr(result)
-            or f"Runtime error on testcase {testcase.order_index}"
-        )
+        detail = summarize_stderr(result) or f"Runtime error (return code {result.returncode})"
         return JudgeOutcome(
             status="RE",
             details=detail,
@@ -298,25 +288,10 @@ def judge_testcase(
             memory_usage_kb=memory_usage_kb,
         )
 
-    if not problem.use_subtask:
-        checker_outcome = run_checker(
-            problem,
-            testcase,
-            box.root_dir / "box" / "output.txt",
-        )
-        if checker_outcome.status != "AC":
-            return JudgeOutcome(
-                status=checker_outcome.status,
-                details=checker_outcome.details,
-                execution_time_ms=execution_time_ms,
-                memory_usage_kb=memory_usage_kb,
-            )
-        detail = checker_outcome.details
-    else:
-        detail = f"Executed testcase {testcase.order_index}"
+    detail = f"Executed testcase {testcase.order_index}"
 
     return JudgeOutcome(
-        status="AC",
+        status="UNK",
         details=detail,
         execution_time_ms=execution_time_ms,
         memory_usage_kb=memory_usage_kb,
@@ -332,7 +307,7 @@ def finalize_success(
     update_submission_status(
         submission_id,
         "AC",
-        f"Accepted ({testcase_count} testcases)",
+        "Accepted",
         max_execution_time_ms or None,
         max_memory_usage_kb or None,
         100,
@@ -344,7 +319,7 @@ def subtask_cases(problem: Problem, testcase_order_index: int) -> list[str]:
     matching_subtasks: list[str] = []
     for subtask_id, info in (problem.subtask_info or {}).items():
         cases = info.get("cases") or []
-        if testcase_order_index in cases:
+        if testcase_order_index in cases:  # type: ignore
             matching_subtasks.append(str(subtask_id))
     return matching_subtasks
 
@@ -358,8 +333,8 @@ def parse_subtasks(problem: Problem) -> list[SubtaskProgress]:
         parsed.append(
             SubtaskProgress(
                 subtask_id=str(subtask_id),
-                score=int(info.get("score", 0)),
-                cases=[int(case_id) for case_id in (info.get("cases") or [])],
+                score=int(info.get("score", 0)),  # type: ignore
+                cases=[int(case_id) for case_id in (info.get("cases") or [])],  # type: ignore
             )
         )
     return parsed
@@ -405,7 +380,9 @@ def finalize_subtask_outcome(
             lines.append(f"Subtask {subtask.subtask_id}: AC (+{subtask.score})")
         else:
             lines.append(
-                f"Subtask {subtask.subtask_id}: {subtask.failure_status or 'WA'} ({subtask.failure_details or 'failed'})"
+                f"Subtask {subtask.subtask_id}: "
+                f"{subtask.failure_status or 'WA'} "
+                f"({subtask.failure_details or 'failed'})"
             )
 
     update_submission_status(
@@ -424,7 +401,7 @@ def judge_submission(submission_id: int) -> None:
     if prepared is None:
         return
 
-    update_submission_status(submission_id, "JUDGING", "Preparing execution")
+    update_submission_status(submission_id, "PREPARING", "Preparing execution")
     try:
         language = get_language(prepared.language_key)
     except ValueError as exc:
@@ -433,9 +410,7 @@ def judge_submission(submission_id: int) -> None:
 
     try:
         prepare_work_directory(prepared.work_directory)
-        write_source_file(
-            prepared.work_directory, language.source_filename, prepared.source_code
-        )
+        write_source_file(prepared.work_directory, language.source_filename, prepared.source_code)
 
         with isolate_box() as box:
             copy_tree_into_box(box, prepared.work_directory)
@@ -451,35 +426,42 @@ def judge_submission(submission_id: int) -> None:
 
             max_execution_time_ms = 0
             max_memory_usage_kb = 0
-            subtasks = (
-                parse_subtasks(prepared.problem) if prepared.problem.use_subtask else []
-            )
+            subtasks = parse_subtasks(prepared.problem) if prepared.problem.use_subtask else []
             subtask_by_id = {subtask.subtask_id: subtask for subtask in subtasks}
 
+            update_submission_status(submission_id, "JUDGING(0%)", "Judging submission")
             for testcase in prepared.testcases:
                 restore_box_contents_from_directory(box, snapshot_dir)
                 stage_testcase_input(box, testcase)
-                outcome = judge_testcase(
+                outcome = run_testcase_with_limit(
                     box,
                     language,
                     testcase,
                     prepared.problem,
                 )
-                max_execution_time_ms = max(
-                    max_execution_time_ms, outcome.execution_time_ms or 0
-                )
-                max_memory_usage_kb = max(
-                    max_memory_usage_kb, outcome.memory_usage_kb or 0
-                )
-                if not prepared.problem.use_subtask and outcome.status != "AC":
-                    apply_outcome(submission_id, outcome)
-                    return
+                max_execution_time_ms = max(max_execution_time_ms, outcome.execution_time_ms or 0)
+                max_memory_usage_kb = max(max_memory_usage_kb, outcome.memory_usage_kb or 0)
                 if not prepared.problem.use_subtask:
+                    checker_outcome = run_checker(
+                        prepared.problem,
+                        testcase,
+                        box.root_dir / "box" / "output.txt",
+                        subtask_id=None,
+                    )
+                    if checker_outcome.status != "AC":
+                        apply_outcome(
+                            submission_id,
+                            JudgeOutcome(
+                                status=checker_outcome.status,
+                                details=checker_outcome.details,
+                                execution_time_ms=outcome.execution_time_ms,
+                                memory_usage_kb=outcome.memory_usage_kb,
+                            ),
+                        )
+                        return
                     continue
 
-                testcase_subtasks = subtask_cases(
-                    prepared.problem, testcase.order_index
-                )
+                testcase_subtasks = subtask_cases(prepared.problem, testcase.order_index)
                 if outcome.status != "AC":
                     for subtask_id in testcase_subtasks:
                         subtask = subtask_by_id[subtask_id]
@@ -503,6 +485,12 @@ def judge_submission(submission_id: int) -> None:
                         subtask.passed = False
                         subtask.failure_status = checker_outcome.status
                         subtask.failure_details = checker_outcome.details
+
+                update_submission_status(
+                    submission_id,
+                    f"JUDGING({testcase.order_index / len(prepared.testcases) * 100:.0f}%)",
+                    "Judging submission",
+                )
 
             if prepared.problem.use_subtask:
                 finalize_subtask_outcome(

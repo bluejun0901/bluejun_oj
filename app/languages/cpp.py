@@ -1,6 +1,5 @@
 from app.languages.types import LanguageSpec
 
-
 LANGUAGE = LanguageSpec(
     key="cpp",
     display_name="C++17",

@@ -1,6 +1,5 @@
 from app.languages.types import LanguageSpec
 
-
 LANGUAGE = LanguageSpec(
     key="python",
     display_name="Python 3",

@@ -31,9 +31,7 @@ class AuthUserOut(UserSummary):
 
 
 class RegisterRequest(BaseModel):
-    username: str = Field(
-        min_length=3, max_length=32, pattern=r"^[a-zA-Z0-9_][a-zA-Z0-9_-]*$"
-    )
+    username: str = Field(min_length=3, max_length=32, pattern=r"^[a-zA-Z0-9_][a-zA-Z0-9_-]*$")
     password: str = Field(min_length=8, max_length=128)
     display_name: str | None = Field(default=None, max_length=100)
     email: str | None = Field(default=None, max_length=255)

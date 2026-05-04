@@ -13,7 +13,6 @@ from app.config import settings
 from app.db import get_db
 from app.models import Problem, User, UserSession
 
-
 SESSION_COOKIE_NAME = "oj_session"
 CSRF_COOKIE_NAME = "oj_csrf"
 CSRF_HEADER_NAME = "X-CSRF-Token"
@@ -48,9 +47,7 @@ def new_session_expiry() -> datetime:
     return utc_now() + timedelta(seconds=settings.session_max_age)
 
 
-def create_user_session(
-    db: Session, user: User, request: Request
-) -> tuple[str, UserSession]:
+def create_user_session(db: Session, user: User, request: Request) -> tuple[str, UserSession]:
     raw_token = token_urlsafe(32)
     csrf_token = token_urlsafe(24)
     session = UserSession(
@@ -143,9 +140,7 @@ def require_authenticated_user(
     current_user: User | None = Depends(get_current_user),
 ) -> User:
     if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     return current_user
 
 
@@ -154,9 +149,7 @@ def require_problem_author_or_admin(
     current_user: User | None,
 ) -> None:
     if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     if current_user.role == "admin":
         return
     if problem.author_id != current_user.id:
@@ -173,9 +166,7 @@ def verify_csrf(request: Request, session: UserSession | None) -> None:
         return
     header_token = request.headers.get(CSRF_HEADER_NAME)
     if not header_token or header_token != session.csrf_token:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid CSRF token"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid CSRF token")
 
 
 def require_csrf(
@@ -189,11 +180,7 @@ def revoke_session(db: Session, request: Request) -> None:
     raw_token = request.cookies.get(SESSION_COOKIE_NAME)
     if not raw_token:
         return
-    db.execute(
-        delete(UserSession).where(
-            UserSession.session_token_hash == hash_session_token(raw_token)
-        )
-    )
+    db.execute(delete(UserSession).where(UserSession.session_token_hash == hash_session_token(raw_token)))
     db.commit()
 
 

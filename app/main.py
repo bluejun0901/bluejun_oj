@@ -11,12 +11,12 @@ from app.auth import (
     create_user_session,
     get_current_user,
     get_session_from_request,
+    hash_password,
     require_authenticated_user,
     require_csrf,
     require_problem_author_or_admin,
     revoke_session,
     set_session_cookies,
-    hash_password,
 )
 from app.bootstrap import init_db, init_storage, seed_admin_user, seed_example_problem
 from app.db import SessionLocal, get_db
@@ -42,7 +42,18 @@ from app.schemas import (
     UserSummary,
 )
 
-app = FastAPI(title="Minimal OJ")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_storage()
+    init_db()
+    with SessionLocal() as db:
+        seed_admin_user(db)
+        seed_example_problem(db)
+    yield
+
+
+app = FastAPI(title="Minimal OJ", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -58,20 +69,8 @@ async def attach_session(request: Request, call_next):
         session = get_session_from_request(db, request)
         response = await call_next(request)
         if session and not getattr(request.state, "clear_session_cookies", False):
-            set_session_cookies(
-                response, request.state.raw_session_token, session.csrf_token
-            )
+            set_session_cookies(response, request.state.raw_session_token, session.csrf_token)
         return response
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    init_storage()
-    init_db()
-    with SessionLocal() as db:
-        seed_admin_user(db)
-        seed_example_problem(db)
-    yield
 
 
 @app.get("/health")
@@ -166,11 +165,7 @@ def get_languages():
 
 @app.get("/problems", response_model=list[ProblemOut])
 def list_problems(db: Session = Depends(get_db)):
-    problems = db.scalars(
-        select(Problem).options(
-            selectinload(Problem.testcases), selectinload(Problem.author)
-        )
-    ).all()
+    problems = db.scalars(select(Problem).options(selectinload(Problem.testcases), selectinload(Problem.author))).all()
     return [ProblemOut.from_model(problem) for problem in problems]
 
 
@@ -221,10 +216,7 @@ def populate_problem(problem: Problem, payload: ProblemCreate) -> None:
     problem.output_spec = payload.output_spec
     problem.examples = [example.model_dump() for example in payload.examples]
     problem.use_subtask = payload.use_subtask
-    problem.subtask_info = {
-        subtask_id: subtask.model_dump()
-        for subtask_id, subtask in payload.subtask_info.items()
-    }
+    problem.subtask_info = {subtask_id: subtask.model_dump() for subtask_id, subtask in payload.subtask_info.items()}
     problem.checker_source_path = payload.checker_source_path
 
 
@@ -245,14 +237,9 @@ def problem_create_from_model(problem: Problem) -> ProblemCreate:
         description=problem.description,
         input_spec=problem.input_spec,
         output_spec=problem.output_spec,
-        examples=[ExampleCreate(**example) for example in problem.examples]
-        if problem.examples
-        else [],
+        examples=[ExampleCreate(**example) for example in problem.examples] if problem.examples else [],
         use_subtask=problem.use_subtask,
-        subtask_info={
-            subtask_id: SubtaskInfoEntry(**subtask)
-            for subtask_id, subtask in problem.subtask_info.items()
-        }
+        subtask_info={subtask_id: SubtaskInfoEntry(**subtask) for subtask_id, subtask in problem.subtask_info.items()}
         if problem.subtask_info
         else {},  # type: ignore
         checker_source_path=problem.checker_source_path,
@@ -260,9 +247,7 @@ def problem_create_from_model(problem: Problem) -> ProblemCreate:
     )
 
 
-def replace_problem_testcases(
-    problem: Problem, payload: ProblemCreate, db: Session
-) -> None:
+def replace_problem_testcases(problem: Problem, payload: ProblemCreate, db: Session) -> None:
     tests_dir = reset_problem_tests_directory(problem.id)
     for testcase in list(problem.testcases):
         db.delete(testcase)
@@ -403,9 +388,7 @@ def create_submission(
     queue = get_queue()
     queue.enqueue("worker.judge_submission.judge_submission", submission.id)
     submission = db.scalar(
-        select(Submission)
-        .where(Submission.id == submission.id)
-        .options(selectinload(Submission.user))
+        select(Submission).where(Submission.id == submission.id).options(selectinload(Submission.user))
     )
     return SubmissionOut.from_model(submission, viewer_id=current_user.id)
 
@@ -417,15 +400,11 @@ def get_submission(
     current_user: User | None = Depends(get_current_user),
 ):
     submission = db.scalar(
-        select(Submission)
-        .where(Submission.id == submission_id)
-        .options(selectinload(Submission.user))
+        select(Submission).where(Submission.id == submission_id).options(selectinload(Submission.user))
     )
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
-    return SubmissionOut.from_model(
-        submission, viewer_id=current_user.id if current_user else None
-    )
+    return SubmissionOut.from_model(submission, viewer_id=current_user.id if current_user else None)
 
 
 @app.get("/problems/{problem_id}/submissions", response_model=list[SubmissionOut])
@@ -445,7 +424,4 @@ def list_problem_submissions(
         .order_by(Submission.created_at.desc(), Submission.id.desc())
     ).all()
     viewer_id = current_user.id if current_user else None
-    return [
-        SubmissionOut.from_model(submission, viewer_id=viewer_id)
-        for submission in submissions
-    ]
+    return [SubmissionOut.from_model(submission, viewer_id=viewer_id) for submission in submissions]

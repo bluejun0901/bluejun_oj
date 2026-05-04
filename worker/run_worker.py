@@ -1,5 +1,5 @@
 from redis import Redis
-from rq import Worker, Queue
+from rq import Queue, Worker
 
 from app.config import settings
 
