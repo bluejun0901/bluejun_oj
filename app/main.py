@@ -239,9 +239,9 @@ def problem_create_from_model(problem: Problem) -> ProblemCreate:
         output_spec=problem.output_spec,
         examples=[ExampleCreate(**example) for example in problem.examples] if problem.examples else [],
         use_subtask=problem.use_subtask,
-        subtask_info={subtask_id: SubtaskInfoEntry(**subtask) for subtask_id, subtask in problem.subtask_info.items()}
+        subtask_info={subtask_id: SubtaskInfoEntry(**subtask) for subtask_id, subtask in problem.subtask_info.items()}  # type: ignore
         if problem.subtask_info
-        else {},  # type: ignore
+        else {},
         checker_source_path=problem.checker_source_path,
         testcases=testcases,
     )

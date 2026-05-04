@@ -182,7 +182,6 @@ textarea {
   justify-content: space-between;
   align-items: end;
   gap: 24px;
-  border-top: 1px solid #d9d2c4;
 }
 
 .eyebrow {
@@ -511,6 +510,10 @@ textarea {
   background: #15171a;
   color: #fff8ea;
   border-radius: 999px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .compact-button,

@@ -462,7 +462,7 @@ def judge_submission(submission_id: int) -> None:
                     continue
 
                 testcase_subtasks = subtask_cases(prepared.problem, testcase.order_index)
-                if outcome.status != "AC":
+                if outcome.status != "UNK":
                     for subtask_id in testcase_subtasks:
                         subtask = subtask_by_id[subtask_id]
                         if subtask.passed:
