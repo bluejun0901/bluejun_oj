@@ -20,8 +20,9 @@ export function SiteHeader({ authUser, authLoading, onLogout }) {
               {authUser.display_name || authUser.username}
               <span className="user-chip-secondary">@{authUser.username}</span>
             </span>
-            <HeaderLink href="/problems/new" primary>
-              New problem
+            <HeaderLink href="/drafts">My drafts</HeaderLink>
+            <HeaderLink href="/drafts/new" primary>
+              New draft
             </HeaderLink>
             <button className="ghost-link ghost-button" type="button" onClick={onLogout}>
               Logout

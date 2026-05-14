@@ -5,7 +5,6 @@
   line-height: 1.5;
   font-weight: 400;
 }
-
 * {
   box-sizing: border-box;
 }
@@ -415,6 +414,10 @@ textarea {
   width: min(260px, 100%);
 }
 
+.field-full {
+  width: 100%;
+}
+
 .checkbox-field {
   width: 100%;
   grid-auto-flow: column;
@@ -451,6 +454,19 @@ textarea {
   color: #15171a;
 }
 
+.editor-code-textarea {
+  width: 100%;
+  min-height: 320px;
+  padding: 18px;
+  border: 1px solid #bfc1bd;
+  resize: vertical;
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.94rem;
+  line-height: 1.55;
+  color: #f0f0ec;
+  background: #1f2328;
+}
+
 .editor textarea {
   width: 100%;
   min-height: min(58vh, 620px);
@@ -484,6 +500,81 @@ textarea {
   display: grid;
   gap: 18px;
   margin-top: 28px;
+}
+
+.editor-section,
+.array-stack,
+.draft-list,
+.draft-card-main,
+.validation-list {
+  display: grid;
+  gap: 16px;
+}
+
+.compact-panel-header h2 {
+  margin: 0;
+}
+
+.array-row,
+.draft-card,
+.notice-card,
+.validation-item {
+  border: 1px solid #d9d2c4;
+  background: #fffdfa;
+}
+
+.array-row,
+.notice-card {
+  padding: 16px;
+}
+
+.array-row-header,
+.draft-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.split-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.draft-card {
+  padding: 18px;
+}
+
+.draft-meta,
+.preview-banner {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: #6c6f75;
+}
+
+.validation-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+}
+
+.validation-warning strong {
+  color: #8a5a00;
+}
+
+.validation-error strong {
+  color: #b42318;
+}
+
+.notice-card {
+  margin-top: 18px;
+}
+
+.statement-footer {
+  margin-top: 18px;
 }
 
 .problem-form-grid {
@@ -537,6 +628,14 @@ textarea {
   background: #fffdfa;
 }
 
+.upload-button {
+  cursor: pointer;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
 .primary-button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -570,6 +669,14 @@ textarea {
 .status-running,
 .status-judging {
   color: #8a5a00;
+}
+
+.status-draft {
+  color: #8a5a00;
+}
+
+.status-published {
+  color: #107c41;
 }
 
 .status-ac {
@@ -707,5 +814,12 @@ textarea {
 
   .problem-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .split-grid,
+  .array-row-header,
+  .draft-card {
+    grid-template-columns: 1fr;
+    flex-direction: column;
   }
 }

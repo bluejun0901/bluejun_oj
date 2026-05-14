@@ -22,11 +22,15 @@ A small local online judge with:
 - `GET /auth/me`
 - `GET /problems`
 - `GET /problems/{id}`
-- `GET /problems/{id}/manage`
 - `GET /problems/{id}/submissions`
 - `GET /languages`
-- `POST /problems`
-- `PUT /problems/{id}`
+- `GET /drafts`
+- `POST /drafts`
+- `GET /drafts/{id}`
+- `PUT /drafts/{id}`
+- `POST /drafts/{id}/preview`
+- `POST /drafts/{id}/publish`
+- `POST /problems/{id}/drafts`
 - `POST /submissions`
 - `GET /submissions/{id}`
 
@@ -143,10 +147,18 @@ curl http://localhost:8000/auth/me -b cookie.txt
 
 State-changing authenticated requests must include the `X-CSRF-Token` header that matches the `oj_csrf` cookie.
 
-## Create a Problem
+## Draft / Publish a Problem
 
 ```bash
-curl -X POST http://localhost:8000/problems \
+curl -X POST http://localhost:8000/drafts \
+  -b cookie.txt -c cookie.txt \
+  -H 'Content-Type: application/json' \
+  -H "X-CSRF-Token: $(grep oj_csrf cookie.txt | awk '{print $7}')" \
+  -d '{}'
+```
+
+```bash
+curl -X PUT http://localhost:8000/drafts/1 \
   -b cookie.txt -c cookie.txt \
   -H 'Content-Type: application/json' \
   -H "X-CSRF-Token: $(grep oj_csrf cookie.txt | awk '{print $7}')" \
@@ -164,7 +176,7 @@ curl -X POST http://localhost:8000/problems \
   ],
   "use_subtask": false,
   "subtask_info": {},
-  "checker_source_path": "problems/print_42",
+  "checker_source": "#include \"testlib.h\"\nint main(int argc, char* argv[]){registerTestlibCmd(argc, argv); quitf(_ok, \"accepted\");}\n",
   "testcases": [
     {"input": "", "output": "42\n"}
   ]
@@ -172,7 +184,19 @@ curl -X POST http://localhost:8000/problems \
 JSON
 ```
 
-Each problem now expects a `checker.cpp` under the configured `checker_source_path` (or one of the built-in problem-directory conventions). The API compiles that checker with `-I./source` and stores the binary in `data/problems/<problem_id>/checker`.
+```bash
+curl -X POST http://localhost:8000/drafts/1/preview \
+  -b cookie.txt -c cookie.txt \
+  -H "X-CSRF-Token: $(grep oj_csrf cookie.txt | awk '{print $7}')"
+```
+
+```bash
+curl -X POST http://localhost:8000/drafts/1/publish \
+  -b cookie.txt -c cookie.txt \
+  -H "X-CSRF-Token: $(grep oj_csrf cookie.txt | awk '{print $7}')"
+```
+
+Published assets are materialized into `data/problems/<problem_id>/`, including `checker.cpp`, the compiled `checker`, and regenerated testcase files.
 
 ## Python Submission Example
 
@@ -236,5 +260,5 @@ The frontend now:
 - keeps public problem browsing open
 - requires login for submissions
 - shows login/register flows
-- supports problem creation and author/admin editing
+- supports draft stack based problem authoring and edit-draft creation from published problems
 - sends cookies and CSRF headers automatically

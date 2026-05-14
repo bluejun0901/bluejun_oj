@@ -2,122 +2,51 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchJson } from "../utils/api";
 import { navigate } from "../utils/router";
 import { formatExecutionTime, formatMemoryUsage, formatScore, formatTimestamp } from "../utils/formatters";
-import { canEditProblem, sortedSubtasks } from "../utils/problem";
-import { MarkdownBlock } from "../components/MarkdownBlock";
 import { SubmissionCard } from "../components/SubmissionCard";
 import { AuthGate } from "../components/AuthGate";
 import { TabLink } from "../components/TabLink";
+import { ProblemStatementView } from "../components/ProblemStatementView";
 import { FINAL_STATUSES } from "../constants";
 
 function StatementTab({ problem, authUser }) {
-  const subtasks = sortedSubtasks(problem.subtask_info);
+  const [creatingDraft, setCreatingDraft] = useState(false);
+  const [error, setError] = useState("");
+
+  const canCreateDraft = authUser && (authUser.role === "admin" || problem.author?.id === authUser.id);
+
+  async function handleCreateEditDraft() {
+    setCreatingDraft(true);
+    setError("");
+    try {
+      const draft = await fetchJson(`/problems/${problem.id}/drafts`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      navigate(`/drafts/${draft.id}/statement`);
+    } catch (createError) {
+      setError(createError.message);
+      setCreatingDraft(false);
+    }
+  }
 
   return (
-    <section className="panel">
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Statement</p>
-          <h2>{problem.title}</h2>
-        </div>
-        <div className="panel-actions">
-          <p className="meta">
-            {problem.time_limit_ms} ms time limit · {problem.memory_limit} MB memory limit
-          </p>
-          {canEditProblem(problem, authUser) ? (
-            <button
-              className="ghost-link ghost-button"
-              type="button"
-              onClick={() => navigate(`/problems/${problem.id}/edit`)}
-            >
-              Edit problem
+    <>
+      <ProblemStatementView
+        problem={problem}
+        action={
+          canCreateDraft ? (
+            <button className="ghost-link ghost-button" type="button" disabled={creatingDraft} onClick={handleCreateEditDraft}>
+              {creatingDraft ? "Creating draft..." : "Create edit draft"}
             </button>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="statement-grid">
-        <section className="statement-section">
-          <h3>Description</h3>
-          <MarkdownBlock fallback="No description provided.">{problem.description}</MarkdownBlock>
+          ) : null
+        }
+      />
+      {error ? (
+        <section className="panel">
+          <p className="error">{error}</p>
         </section>
-        <section className="statement-section">
-          <h3>Input</h3>
-          <MarkdownBlock fallback="No input specification provided.">{problem.input_spec}</MarkdownBlock>
-        </section>
-        <section className="statement-section">
-          <h3>Output</h3>
-          <MarkdownBlock fallback="No output specification provided.">{problem.output_spec}</MarkdownBlock>
-        </section>
-        <section className="statement-section">
-          <h3>Metadata</h3>
-          <div className="meta-stack">
-            <p className="meta">Author: {problem.author ? `@${problem.author.username}` : "unknown"}</p>
-            <p className="meta">Slug: {problem.slug}</p>
-            <p className="meta">Testcases: {problem.testcase_count}</p>
-          </div>
-        </section>
-        <section className="statement-section">
-          <h3>Examples</h3>
-          <div className="examples-stack">
-            {problem.examples?.length ? (
-              problem.examples.map((example, index) => (
-                <div className="example-pair" key={`example-${index + 1}`}>
-                  <p className="example-title">Example {index + 1}</p>
-                  <div className="example-grid">
-                    <div className="example-box">
-                      <span className="example-label">Input</span>
-                      <pre>{example.input || "—"}</pre>
-                    </div>
-                    <div className="example-box">
-                      <span className="example-label">Output</span>
-                      <pre>{example.output || "—"}</pre>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="example-grid">
-                <div className="example-box">
-                  <span className="example-label">Input</span>
-                  <pre>—</pre>
-                </div>
-                <div className="example-box">
-                  <span className="example-label">Output</span>
-                  <pre>—</pre>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-        {problem.use_subtask ? (
-          <section className="statement-section">
-            <h3>Subtasks</h3>
-            <div className="subtask-table-wrapper">
-              <table className="subtask-table">
-                <thead>
-                  <tr>
-                    <th>subtask</th>
-                    <th>score</th>
-                    <th>description</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {subtasks.map(([subtaskId, subtask]) => (
-                    <tr key={subtaskId}>
-                      <td>{`subtask ${subtaskId}`}</td>
-                      <td>{subtask.score}</td>
-                      <td>
-                        <MarkdownBlock fallback="—">{subtask.desc}</MarkdownBlock>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        ) : null}
-      </div>
-    </section>
+      ) : null}
+    </>
   );
 }
 

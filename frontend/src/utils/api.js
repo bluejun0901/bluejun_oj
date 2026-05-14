@@ -12,8 +12,9 @@ export function readCookie(name) {
 export async function fetchJson(path, options = {}) {
   const method = options.method ?? "GET";
   const headers = new Headers(options.headers ?? {});
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
 
-  if (!headers.has("Content-Type") && method !== "GET" && method !== "HEAD") {
+  if (!isFormData && !headers.has("Content-Type") && method !== "GET" && method !== "HEAD") {
     headers.set("Content-Type", "application/json");
   }
 
@@ -32,12 +33,19 @@ export async function fetchJson(path, options = {}) {
 
   if (!response.ok) {
     let detail = `Request failed with status ${response.status}`;
+
     try {
       const data = await response.json();
-      detail = data.detail || detail;
+
+      if (Array.isArray(data.detail)) {
+        detail = data.detail.map((e) => e.msg).join(", ");
+      } else if (typeof data.detail === "string") {
+        detail = data.detail;
+      }
     } catch {
       // Ignore non-JSON responses.
     }
+
     const error = new Error(detail);
     error.status = response.status;
     throw error;

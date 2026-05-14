@@ -5,10 +5,10 @@ import subprocess
 from pathlib import Path
 
 from app.config import settings
-from app.models import Problem
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CHECKER_BINARY_NAME = "checker"
+CHECKER_SOURCE_NAME = "checker.cpp"
 
 
 class CheckerCompileError(RuntimeError):
@@ -19,49 +19,80 @@ def problem_data_dir(problem_id: int) -> Path:
     return settings.data_dir / "problems" / str(problem_id)
 
 
-def problem_tests_dir(problem_id: int) -> Path:
-    return problem_data_dir(problem_id) / "tests"
+def draft_data_dir(draft_id: int) -> Path:
+    return settings.data_dir / "drafts" / str(draft_id)
 
 
-def checker_binary_path(problem_id: int) -> Path:
-    return problem_data_dir(problem_id) / CHECKER_BINARY_NAME
+def tests_dir(root_dir: Path) -> Path:
+    return root_dir / "tests"
 
 
-def resolve_checker_source_dir(problem: Problem) -> Path:
-    candidates: list[Path] = []
-    if problem.checker_source_path:
-        configured_path = Path(problem.checker_source_path)
-        candidates.append(configured_path if configured_path.is_absolute() else REPO_ROOT / configured_path)
-
-    slug_underscored = problem.slug.replace("-", "_")
-    candidates.extend(
-        [
-            REPO_ROOT / "problems" / problem.slug,
-            REPO_ROOT / "problems" / slug_underscored,
-            REPO_ROOT / "problems" / f"example_{slug_underscored}",
-        ]
-    )
-
-    for candidate in candidates:
-        if candidate.is_dir():
-            return candidate
-    searched = ", ".join(str(path) for path in candidates)
-    raise CheckerCompileError(f"Checker source directory not found for problem '{problem.slug}'. Searched: {searched}")
+def checker_binary_path(root_dir: Path) -> Path:
+    return root_dir / CHECKER_BINARY_NAME
 
 
-def checker_source_file(problem: Problem) -> Path:
-    source_dir = resolve_checker_source_dir(problem)
-    checker_path = source_dir / "checker.cpp"
-    if not checker_path.is_file():
-        raise CheckerCompileError(f"Checker source file not found: {checker_path}")
-    return checker_path
+def checker_source_path(root_dir: Path) -> Path:
+    return root_dir / CHECKER_SOURCE_NAME
 
 
-def compile_checker(problem: Problem) -> Path:
-    source_path = checker_source_file(problem)
-    output_path = checker_binary_path(problem.id)
+def ensure_data_dir(root_dir: Path) -> None:
+    root_dir.mkdir(parents=True, exist_ok=True)
+    tests_dir(root_dir).mkdir(parents=True, exist_ok=True)
+
+
+def reset_tests_dir(root_dir: Path) -> Path:
+    target = tests_dir(root_dir)
+    if target.exists():
+        shutil.rmtree(target)
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def write_checker_source(root_dir: Path, source_code: str) -> str:
+    ensure_data_dir(root_dir)
+    target = checker_source_path(root_dir)
+    target.write_text(source_code, encoding="utf-8")
+    return str(target)
+
+
+def read_text_asset(path: str | None) -> str:
+    if not path:
+        return ""
+    target = Path(path)
+    if not target.is_file():
+        return ""
+    return target.read_text(encoding="utf-8")
+
+
+def write_testcase_files(root_dir: Path, cases: list[dict[str, str]]) -> list[dict[str, str]]:
+    target_dir = reset_tests_dir(root_dir)
+    written: list[dict[str, str]] = []
+    for index, testcase in enumerate(cases, start=1):
+        stem = testcase.get("name") or f"case-{index}"
+        input_path = target_dir / f"{index}.in"
+        output_path = target_dir / f"{index}.out"
+        input_path.write_text(testcase["input"], encoding="utf-8")
+        output_path.write_text(testcase["output"], encoding="utf-8")
+        written.append(
+            {
+                "order_index": index,
+                "name": stem,
+                "input_path": str(input_path),
+                "output_path": str(output_path),
+            }
+        )
+    return written
+
+
+def read_testcase_text(input_path: str, output_path: str) -> dict[str, str]:
+    return {
+        "input": Path(input_path).read_text(encoding="utf-8"),
+        "output": Path(output_path).read_text(encoding="utf-8"),
+    }
+
+
+def compile_checker_source(source_path: Path, output_path: Path) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-
     command = [
         "/usr/bin/g++",
         "-std=c++17",
@@ -77,14 +108,12 @@ def compile_checker(problem: Problem) -> Path:
     if result.returncode != 0:
         details = (result.stderr or result.stdout).strip() or "unknown checker compilation error"
         raise CheckerCompileError(f"Failed to compile checker: {details}")
-
     output_path.chmod(0o755)
     return output_path
 
 
-def reset_problem_tests_directory(problem_id: int) -> Path:
-    tests_dir = problem_tests_dir(problem_id)
-    if tests_dir.exists():
-        shutil.rmtree(tests_dir)
-    tests_dir.mkdir(parents=True, exist_ok=True)
-    return tests_dir
+def compile_checker_from_root(root_dir: Path) -> Path:
+    source = checker_source_path(root_dir)
+    if not source.is_file():
+        raise CheckerCompileError(f"Checker source file not found: {source}")
+    return compile_checker_source(source, checker_binary_path(root_dir))

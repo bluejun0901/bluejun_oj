@@ -7,7 +7,14 @@ import { SiteHeader } from "./components/SiteHeader";
 import { HomePage } from "./pages/Home";
 import { ProblemPage } from "./pages/Problem";
 import { LoginPage, RegisterPage } from "./pages/Auth";
-import { ProblemEditorPage } from "./pages/ProblemEditor";
+import { DraftListPage } from "./pages/Drafts";
+import { DraftNewPage } from "./pages/DraftNew";
+import { DraftStatementPage } from "./pages/DraftStatement";
+import { DraftSubtasksPage } from "./pages/DraftSubtasks";
+import { DraftTestcasesPage } from "./pages/DraftTestcases";
+import { DraftTestcaseDetailPage } from "./pages/DraftTestcaseDetail";
+import { DraftCheckerPage } from "./pages/DraftChecker";
+import { DraftPreviewPage } from "./pages/DraftPreview";
 import { NotFoundPage } from "./pages/NotFound";
 
 export default function App() {
@@ -67,12 +74,19 @@ export default function App() {
       <SiteHeader authUser={authUser} authLoading={authLoading} onLogout={handleLogout} />
 
       {route.name === "home" ? <HomePage /> : null}
+      {route.name === "draft-list" ? <DraftListPage authUser={authUser} /> : null}
+      {route.name === "draft-new" ? <DraftNewPage authUser={authUser} /> : null}
       {route.name === "problem" ? <ProblemPage authUser={authUser} problemId={route.problemId} tab={route.tab} /> : null}
       {route.name === "login" ? <LoginPage onAuthenticated={setAuthUser} /> : null}
       {route.name === "register" ? <RegisterPage onAuthenticated={setAuthUser} /> : null}
-      {route.name === "problem-editor" ? (
-        <ProblemEditorPage authUser={authUser} mode={route.mode} problemId={route.problemId} />
+      {route.name === "draft-statement" ? <DraftStatementPage authUser={authUser} draftId={route.draftId} /> : null}
+      {route.name === "draft-subtasks" ? <DraftSubtasksPage authUser={authUser} draftId={route.draftId} /> : null}
+      {route.name === "draft-testcases" ? <DraftTestcasesPage authUser={authUser} draftId={route.draftId} /> : null}
+      {route.name === "draft-testcase-detail" ? (
+        <DraftTestcaseDetailPage authUser={authUser} draftId={route.draftId} testcaseId={route.testcaseId} />
       ) : null}
+      {route.name === "draft-checker" ? <DraftCheckerPage authUser={authUser} draftId={route.draftId} /> : null}
+      {route.name === "draft-preview" ? <DraftPreviewPage authUser={authUser} draftId={route.draftId} /> : null}
       {route.name === "not-found" ? <NotFoundPage /> : null}
     </main>
   );

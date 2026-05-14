@@ -14,6 +14,3 @@ export function HeaderLink({ href, children, primary = false }) {
     </a>
   );
 }
-
-// ghost-link ghost-button
-// primary-button compact-button

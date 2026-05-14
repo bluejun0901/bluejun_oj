@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
-from app.models import Problem, User, UserSession
+from app.models import Problem, ProblemDraft, User, UserSession
 
 SESSION_COOKIE_NAME = "oj_session"
 CSRF_COOKIE_NAME = "oj_csrf"
@@ -156,6 +156,21 @@ def require_problem_author_or_admin(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not allowed to modify this problem",
+        )
+
+
+def require_draft_author_or_admin(
+    draft: ProblemDraft,
+    current_user: User | None,
+) -> None:
+    if not current_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    if current_user.role == "admin":
+        return
+    if draft.author_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not allowed to modify this draft",
         )
 
 

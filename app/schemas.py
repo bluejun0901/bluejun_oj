@@ -10,11 +10,7 @@ class UserSummary(BaseModel):
 
     @classmethod
     def from_model(cls, user):
-        return cls(
-            id=user.id,
-            username=user.username,
-            display_name=user.display_name,
-        )
+        return cls(id=user.id, username=user.username, display_name=user.display_name)
 
 
 class AuthUserOut(UserSummary):
@@ -22,12 +18,7 @@ class AuthUserOut(UserSummary):
 
     @classmethod
     def from_model(cls, user):
-        return cls(
-            id=user.id,
-            username=user.username,
-            display_name=user.display_name,
-            role=user.role,
-        )
+        return cls(id=user.id, username=user.username, display_name=user.display_name, role=user.role)
 
 
 class RegisterRequest(BaseModel):
@@ -73,6 +64,107 @@ class ProblemCreate(BaseModel):
     testcases: list[TestcaseCreate]
 
 
+class DraftCreate(BaseModel):
+    source_problem_id: int | None = None
+
+
+class DraftSummaryOut(BaseModel):
+    id: int
+    status: str
+    author: UserSummary
+    source_problem_id: int | None
+    title: str
+    slug: str
+    use_subtask: bool
+    testcase_count: int
+    created_at: datetime
+    updated_at: datetime
+    published_at: datetime | None
+
+    @classmethod
+    def from_model(cls, draft):
+        return cls(
+            id=draft.id,
+            status=draft.status,
+            author=UserSummary.from_model(draft.author),
+            source_problem_id=draft.source_problem_id,
+            title=draft.title,
+            slug=draft.slug,
+            use_subtask=draft.use_subtask,
+            testcase_count=len(draft.testcases),
+            created_at=draft.created_at,
+            updated_at=draft.updated_at,
+            published_at=draft.published_at,
+        )
+
+
+class DraftStatementUpdate(BaseModel):
+    title: str
+    slug: str = Field(default="", pattern=r"^[a-zA-Z0-9_-]*$")
+    time_limit_ms: int = Field(gt=0, le=10000)
+    memory_limit: int = Field(gt=0, le=4096)
+    description: str = ""
+    input_spec: str = ""
+    output_spec: str = ""
+    examples: list[ExampleCreate] = Field(default_factory=list)
+
+
+class DraftStatementOut(DraftStatementUpdate):
+    summary: DraftSummaryOut
+
+
+class DraftSubtasksUpdate(BaseModel):
+    use_subtask: bool = False
+    subtask_info: dict[str, SubtaskInfoEntry] = Field(default_factory=dict)
+
+
+class DraftSubtasksOut(DraftSubtasksUpdate):
+    summary: DraftSummaryOut
+
+
+class DraftCheckerUpdate(BaseModel):
+    checker_source: str
+
+
+class DraftCheckerOut(DraftCheckerUpdate):
+    summary: DraftSummaryOut
+    checker_source_path: str | None
+
+
+class DraftTestcaseSummaryOut(BaseModel):
+    id: int
+    order_index: int
+    name: str
+
+    @classmethod
+    def from_model(cls, testcase):
+        return cls(id=testcase.id, order_index=testcase.order_index, name=testcase.name)
+
+
+class DraftTestcaseDetailUpdate(BaseModel):
+    name: str
+    input: str
+    output: str
+
+
+class DraftTestcaseDetailOut(DraftTestcaseDetailUpdate):
+    id: int
+    order_index: int
+    input_path: str
+    output_path: str
+
+
+class DraftTestcaseListOut(BaseModel):
+    summary: DraftSummaryOut
+    items: list[DraftTestcaseSummaryOut]
+
+
+class DraftPreviewValidation(BaseModel):
+    code: str
+    message: str
+    level: str
+
+
 class ProblemOut(BaseModel):
     id: int
     author: UserSummary | None
@@ -107,6 +199,14 @@ class ProblemOut(BaseModel):
         )
 
 
+class DraftPreviewOut(BaseModel):
+    draft: DraftSummaryOut
+    problem: ProblemOut
+    checker_compiles: bool
+    checker_error: str | None
+    validations: list[DraftPreviewValidation]
+
+
 class LanguageOut(BaseModel):
     key: str
     display_name: str
@@ -114,11 +214,7 @@ class LanguageOut(BaseModel):
 
     @classmethod
     def from_spec(cls, spec):
-        return cls(
-            key=spec.key,
-            display_name=spec.display_name,
-            default_source=spec.default_source,
-        )
+        return cls(key=spec.key, display_name=spec.display_name, default_source=spec.default_source)
 
 
 class SubmissionCreate(BaseModel):
